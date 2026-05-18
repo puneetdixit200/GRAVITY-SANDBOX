@@ -14,9 +14,10 @@ export function distortPoint(point: Vector, bodies: Body[]): Vector {
       continue;
     }
     const pull = Math.min(18, (body.mass / Math.max(1, r2)) * 18);
+    const direction = normalize(delta);
     offset = {
-      x: offset.x + normalize(delta).x * pull,
-      y: offset.y + normalize(delta).y * pull
+      x: offset.x + direction.x * pull,
+      y: offset.y + direction.y * pull
     };
   }
 

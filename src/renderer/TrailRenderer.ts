@@ -5,11 +5,12 @@ export function drawTrails(ctx: CanvasRenderingContext2D, bodies: Body[], trails
     return;
   }
 
+  const denseScene = bodies.length > 120;
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
 
   for (const body of bodies) {
-    if (body.trail.length < 2 || body.type === "asteroid" || body.hidden) {
+    if (body.trail.length < 2 || body.type === "asteroid" || body.hidden || (denseScene && body.type === "debris")) {
       continue;
     }
 
@@ -19,8 +20,10 @@ export function drawTrails(ctx: CanvasRenderingContext2D, bodies: Body[], trails
       continue;
     }
 
-    for (let i = 1; i < body.trail.length; i += 1) {
-      const previous = body.trail[i - 1];
+    const stride = denseScene ? Math.max(1, Math.floor(body.trail.length / 42)) : 1;
+
+    for (let i = stride; i < body.trail.length; i += stride) {
+      const previous = body.trail[i - stride];
       const current = body.trail[i];
       const alpha = (i / body.trail.length) * 0.42;
       ctx.strokeStyle = alphaColor(body.color, alpha);

@@ -28,7 +28,7 @@ test("renders the simulator and responds to core controls", async ({ page }, tes
       const match = text.match(/Bodies\s+(\d+)/);
       return match ? Number(match[1]) : 0;
     })
-    .toBeGreaterThan(400);
+    .toBeGreaterThan(120);
 
   const pixelStats = await page.evaluate(() => {
     const canvas = document.querySelector("canvas");

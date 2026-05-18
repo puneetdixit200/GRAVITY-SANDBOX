@@ -69,8 +69,7 @@ button {
 }
 
 .background-stars {
-  opacity: 0.52;
-  mix-blend-mode: screen;
+  opacity: 0.42;
 }
 
 .star-layer {
@@ -79,22 +78,11 @@ button {
     radial-gradient(circle at 42% 71%, rgba(255, 255, 255, 0.55) 0 1px, transparent 1px),
     radial-gradient(circle at 78% 33%, rgba(255, 255, 255, 0.45) 0 1px, transparent 1px);
   background-size: 140px 140px, 190px 190px, 260px 260px;
-  animation: twinkle 8s ease-in-out infinite alternate;
 }
 
 .star-layer-b {
   opacity: 0.44;
   transform: translate3d(20px, 12px, 0);
-  animation-duration: 13s;
-}
-
-@keyframes twinkle {
-  from {
-    opacity: 0.32;
-  }
-  to {
-    opacity: 0.82;
-  }
 }
 
 .body-toolbar,
@@ -107,7 +95,6 @@ button {
   z-index: 3;
   border: 1px solid var(--line);
   background: var(--panel);
-  backdrop-filter: blur(16px);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
 }
 

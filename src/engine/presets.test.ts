@@ -22,9 +22,19 @@ describe("preset generation", () => {
   it("creates a dense galaxy collision with dark matter halos", () => {
     const bodies = createPreset("galaxyCollision", { width: 1400, height: 900 });
 
-    expect(bodies.length).toBeGreaterThanOrEqual(220);
-    expect(bodies.length).toBeLessThanOrEqual(420);
+    expect(bodies.length).toBeGreaterThanOrEqual(120);
+    expect(bodies.length).toBeLessThanOrEqual(160);
     expect(bodies.filter((body) => body.type === "darkMatter" && body.hidden)).toHaveLength(2);
+  });
+
+  it("keeps galaxy mode particle counts within the Canvas 2D performance budget", () => {
+    const desktop = createPreset("galaxyMode", { width: 1440, height: 900 });
+    const mobile = createPreset("galaxyMode", { width: 412, height: 915 });
+
+    expect(desktop.length).toBeGreaterThanOrEqual(120);
+    expect(desktop.length).toBeLessThanOrEqual(160);
+    expect(mobile.length).toBeGreaterThanOrEqual(110);
+    expect(mobile.length).toBeLessThanOrEqual(150);
   });
 
   it("creates a capture challenge with a named target moon", () => {

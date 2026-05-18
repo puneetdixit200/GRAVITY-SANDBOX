@@ -18,6 +18,7 @@ import {
   sub,
   upgradeTypeForMass
 } from "./Body";
+import { ForceMode, computeBarnesHutAccelerations, computeDirectAccelerations, computeHybridAccelerations } from "./GravitySolver";
 
 export {
   BODY_DEFINITIONS,
@@ -36,6 +37,7 @@ export {
   upgradeTypeForMass
 } from "./Body";
 export type { Body, BodyDefinition, BodyType, TrailPoint, Vector } from "./Body";
+export type { ForceMode } from "./GravitySolver";
 
 export type EffectKind = "collision" | "absorb" | "roche" | "wave";
 
@@ -73,6 +75,10 @@ export type SimulationOptions = {
   trailLimit?: number;
 };
 
+export type EnergyOptions = {
+  maxPairs?: number;
+};
+
 type BodySnapshot = Omit<Body, "trail"> & {
   trail: Body["trail"];
 };
@@ -86,6 +92,30 @@ const EFFECT_TTL: Record<EffectKind, number> = {
 
 let effectId = 0;
 
+function canRocheFragment(body: Body): boolean {
+  return body.type === "planet" || body.type === "giant";
+}
+
+function canCauseRocheFragmentation(body: Body): boolean {
+  return body.type === "star" || body.type === "blackHole" || body.type === "giant";
+}
+
+function isFineParticle(body: Body): boolean {
+  return body.type === "asteroid" || body.type === "debris";
+}
+
+function shouldCheckCollision(a: Body, b: Body, denseScene: boolean): boolean {
+  if (a.type === "darkMatter" || b.type === "darkMatter") {
+    return false;
+  }
+
+  if (denseScene && (isFineParticle(a) || isFineParticle(b)) && a.type !== "blackHole" && b.type !== "blackHole") {
+    return false;
+  }
+
+  return true;
+}
+
 export class Simulation {
   bodies: Body[];
   effects: SimulationEffect[] = [];
@@ -96,6 +126,7 @@ export class Simulation {
   historyLimit: number;
   trailLimit: number;
   elapsed = 0;
+  lastForceMode: ForceMode = "direct";
   private history: BodySnapshot[][] = [];
   private waveClock = new Map<string, number>();
 
@@ -136,28 +167,33 @@ export class Simulation {
     this.captureSnapshot();
   }
 
-  computeAccelerations(bodies = this.bodies): Vector[] {
-    const accelerations = bodies.map(() => ({ x: 0, y: 0 }));
-    const exponent = Math.max(0.35, Math.min(4, this.forceExponent));
+  computeAccelerations(bodies = this.bodies, mode?: ForceMode): Vector[] {
+    const forceMode = mode ?? this.selectForceMode(bodies);
+    this.lastForceMode = forceMode;
+    const options = {
+      gravity: this.gravity,
+      softening: this.softening,
+      forceExponent: this.forceExponent
+    };
 
-    for (let i = 0; i < bodies.length; i += 1) {
-      for (let j = i + 1; j < bodies.length; j += 1) {
-        const a = bodies[i];
-        const b = bodies[j];
-        const delta = sub(b.position, a.position);
-        const distanceSquared = delta.x * delta.x + delta.y * delta.y + this.softening * this.softening;
-        const denominator = Math.pow(distanceSquared, (exponent + 1) / 2);
-        const factor = denominator > 0 ? this.gravity / denominator : 0;
-
-        const ai = scale(delta, factor * b.mass);
-        const aj = scale(delta, -factor * a.mass);
-
-        accelerations[i] = add(accelerations[i], ai);
-        accelerations[j] = add(accelerations[j], aj);
-      }
+    if (forceMode === "hybrid") {
+      return computeHybridAccelerations(bodies, options);
     }
 
-    return accelerations.map(finiteVector);
+    return forceMode === "barnesHut" ? computeBarnesHutAccelerations(bodies, options) : computeDirectAccelerations(bodies, options);
+  }
+
+  private selectForceMode(bodies: Body[]): ForceMode {
+    if (bodies.length < 120) {
+      return "direct";
+    }
+
+    const particleCount = bodies.reduce((count, body) => count + (isFineParticle(body) ? 1 : 0), 0);
+    if (bodies.length >= 120 && particleCount / bodies.length > 0.5) {
+      return "hybrid";
+    }
+
+    return "barnesHut";
   }
 
   step(dt: number, substeps = 2) {
@@ -186,6 +222,7 @@ export class Simulation {
   resolveCollisions() {
     let changed = true;
     let guard = 0;
+    const denseScene = this.bodies.length > 120;
 
     while (changed && guard < 20) {
       changed = false;
@@ -199,6 +236,10 @@ export class Simulation {
         for (let j = i + 1; j < this.bodies.length; j += 1) {
           const a = this.bodies[i];
           const b = this.bodies[j];
+          if (!shouldCheckCollision(a, b, denseScene)) {
+            continue;
+          }
+
           const gap = distance(a.position, b.position);
 
           const blackHole = a.type === "blackHole" ? a : b.type === "blackHole" ? b : undefined;
@@ -221,10 +262,14 @@ export class Simulation {
     }
   }
 
-  totalEnergy(): number {
+  totalEnergy(options: EnergyOptions = {}): number {
     let kinetic = 0;
     let potential = 0;
     const exponent = Math.max(0.35, Math.min(4, this.forceExponent));
+    const totalPairs = (this.bodies.length * (this.bodies.length - 1)) / 2;
+    const maxPairs = options.maxPairs && options.maxPairs > 0 ? options.maxPairs : totalPairs;
+    const stride = totalPairs > maxPairs ? Math.ceil(totalPairs / maxPairs) : 1;
+    let pairIndex = 0;
 
     for (const body of this.bodies) {
       const speed = magnitude(body.velocity);
@@ -233,11 +278,18 @@ export class Simulation {
 
     for (let i = 0; i < this.bodies.length; i += 1) {
       for (let j = i + 1; j < this.bodies.length; j += 1) {
+        pairIndex += 1;
+        if (stride > 1 && pairIndex % stride !== 0) {
+          continue;
+        }
+
         const r = Math.max(this.softening, distance(this.bodies[i].position, this.bodies[j].position));
         if (Math.abs(exponent - 1) < 1e-4) {
-          potential += this.gravity * this.bodies[i].mass * this.bodies[j].mass * Math.log(r);
+          potential += this.gravity * this.bodies[i].mass * this.bodies[j].mass * Math.log(r) * stride;
         } else {
-          potential -= (this.gravity * this.bodies[i].mass * this.bodies[j].mass) / ((exponent - 1) * Math.pow(r, exponent - 1));
+          potential -=
+            ((this.gravity * this.bodies[i].mass * this.bodies[j].mass) / ((exponent - 1) * Math.pow(r, exponent - 1))) *
+            stride;
         }
       }
     }
@@ -380,11 +432,15 @@ export class Simulation {
   }
 
   private resolveRocheLimits() {
+    if (this.bodies.length > 900) {
+      return;
+    }
+
     const additions: Body[] = [];
     const removed = new Set<string>();
 
     for (const massive of this.bodies) {
-      if (removed.has(massive.id) || massive.mass < 20) {
+      if (removed.has(massive.id) || massive.mass < 20 || !canCauseRocheFragmentation(massive)) {
         continue;
       }
 
@@ -395,6 +451,7 @@ export class Simulation {
           small.type === "blackHole" ||
           small.type === "darkMatter" ||
           small.type === "debris" ||
+          !canRocheFragment(small) ||
           massive.mass < small.mass * 25
         ) {
           continue;
@@ -486,13 +543,12 @@ export class Simulation {
   }
 
   private detectGravitationalWaves() {
-    for (let i = 0; i < this.bodies.length; i += 1) {
-      for (let j = i + 1; j < this.bodies.length; j += 1) {
-        const a = this.bodies[i];
-        const b = this.bodies[j];
-        if (a.mass * b.mass < 1800) {
-          continue;
-        }
+    const massiveBodies = this.bodies.filter((body) => body.mass >= 20 && body.type !== "darkMatter");
+
+    for (let i = 0; i < massiveBodies.length; i += 1) {
+      for (let j = i + 1; j < massiveBodies.length; j += 1) {
+        const a = massiveBodies[i];
+        const b = massiveBodies[j];
 
         const gap = distance(a.position, b.position);
         if (gap > 230 || gap < 1) {
@@ -512,15 +568,18 @@ export class Simulation {
   }
 
   private updateTrails() {
+    const denseScene = this.bodies.length > 120;
+
     for (const body of this.bodies) {
-      if (body.type === "asteroid" || body.hidden) {
+      if (body.type === "asteroid" || body.hidden || (denseScene && body.type === "debris")) {
         body.trail = [];
         continue;
       }
 
       body.trail.push({ ...body.position, t: this.elapsed });
-      if (body.trail.length > this.trailLimit) {
-        body.trail.splice(0, body.trail.length - this.trailLimit);
+      const limit = denseScene ? Math.min(this.trailLimit, body.type === "star" ? 96 : 64) : this.trailLimit;
+      if (body.trail.length > limit) {
+        body.trail.splice(0, body.trail.length - limit);
       }
     }
   }

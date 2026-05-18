@@ -35,6 +35,9 @@ export function SimulationCanvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderer = useMemo(() => new CanvasRenderer(), []);
   const lastStatsRef = useRef(0);
+  const lastEnergyRef = useRef({ time: 0, value: 0 });
+  const accumulatedDtRef = useRef(0);
+  const lastProcessedFrameRef = useRef(0);
   const frameCounterRef = useRef({ frames: 0, fps: 60, time: 0 });
   const effectIdsRef = useRef(new Set<string>());
 
@@ -48,6 +51,18 @@ export function SimulationCanvas({
   });
 
   useAnimationLoop((dt, now) => {
+    accumulatedDtRef.current += dt;
+    const crowdedScene = simulation.bodies.length > 120;
+    const compactViewport = typeof window !== "undefined" && window.innerWidth < 720;
+    const denseScene = crowdedScene || compactViewport;
+    const frameBudgetMs = denseScene ? 1000 / 38 : 0;
+    if (frameBudgetMs > 0 && now - lastProcessedFrameRef.current < frameBudgetMs) {
+      return;
+    }
+    const frameDt = Math.min(0.08, accumulatedDtRef.current);
+    accumulatedDtRef.current = 0;
+    lastProcessedFrameRef.current = now;
+
     simulation.gravity = settings.gravity;
     simulation.forceExponent = settings.forceExponent;
 
@@ -59,8 +74,8 @@ export function SimulationCanvas({
     }
 
     if (!settings.paused) {
-      const substeps = simulation.bodies.length > 220 ? 1 : settings.timeScale > 6 ? 4 : 3;
-      simulation.step(dt * settings.timeScale, substeps);
+      const substeps = crowdedScene || simulation.bodies.length > 220 ? 1 : settings.timeScale > 6 ? 4 : 3;
+      simulation.step(frameDt * settings.timeScale, substeps);
     }
 
     const currentEffectIds = new Set(simulation.effects.map((effect) => effect.id));
@@ -91,12 +106,19 @@ export function SimulationCanvas({
       );
     }
 
-    if (now - lastStatsRef.current > 220) {
+    const statsInterval = crowdedScene ? 500 : 220;
+    if (now - lastStatsRef.current > statsInterval) {
       lastStatsRef.current = now;
       const momentum = totalMomentum(simulation.bodies);
+      if (simulation.bodies.length <= 120 || now - lastEnergyRef.current.time > 1000) {
+        lastEnergyRef.current = {
+          time: now,
+          value: simulation.totalEnergy(simulation.bodies.length > 220 ? { maxPairs: 12_000 } : undefined)
+        };
+      }
       onStats({
         bodyCount: simulation.bodies.length,
-        energy: simulation.totalEnergy(),
+        energy: lastEnergyRef.current.value,
         momentum: magnitude(momentum),
         angularMomentum: simulation.totalAngularMomentum(),
         elapsed: simulation.elapsed,

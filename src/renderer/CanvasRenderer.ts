@@ -15,29 +15,18 @@ export type RenderOptions = {
   placement: PlacementPreview | null;
 };
 
-type Star = {
-  x: number;
-  y: number;
-  r: number;
-  a: number;
-  twinkle: number;
-};
-
 export class CanvasRenderer {
-  private stars: Star[] = [];
-  private starWidth = 0;
-  private starHeight = 0;
-
   render(canvas: HTMLCanvasElement, simulation: Simulation, options: RenderOptions, now: number) {
     const context = canvas.getContext("2d");
     if (!context) {
       return;
     }
 
-    const { width, height, ratio } = this.resize(canvas);
+    const bodyCount = simulation.bodies.length;
+    const { width, height, ratio } = this.resize(canvas, bodyCount);
     context.save();
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    this.drawSpace(context, width, height, now);
+    this.drawSpace(context, width, height);
 
     if (options.heatmap) {
       this.drawHeatmap(context, simulation, width, height);
@@ -67,17 +56,20 @@ export class CanvasRenderer {
       if (body.hidden && !options.darkMatterVisible) {
         continue;
       }
-      this.drawBody(context, body, now, options.darkMatterVisible);
+      this.drawBody(context, body, now, options.darkMatterVisible, bodyCount);
     }
 
     this.drawPlacement(context, options.placement);
     context.restore();
   }
 
-  private resize(canvas: HTMLCanvasElement) {
-    const ratio = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+  private resize(canvas: HTMLCanvasElement, bodyCount: number) {
     const width = canvas.clientWidth || window.innerWidth;
     const height = canvas.clientHeight || window.innerHeight;
+    const denseScene = bodyCount > 120;
+    const compactViewport = width < 720 || height < 720;
+    const maxRatio = denseScene || compactViewport ? 1 : 1.5;
+    const ratio = Math.max(1, Math.min(maxRatio, window.devicePixelRatio || 1));
     const targetWidth = Math.floor(width * ratio);
     const targetHeight = Math.floor(height * ratio);
 
@@ -89,55 +81,27 @@ export class CanvasRenderer {
     return { width, height, ratio };
   }
 
-  private drawSpace(ctx: CanvasRenderingContext2D, width: number, height: number, now: number) {
-    const gradient = ctx.createLinearGradient(0, 0, width, height);
-    gradient.addColorStop(0, "#000000");
-    gradient.addColorStop(0.62, "#030318");
-    gradient.addColorStop(1, "#05020a");
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
-
-    this.ensureStars(width, height);
-    ctx.save();
-    ctx.globalCompositeOperation = "screen";
-    for (const star of this.stars) {
-      const alpha = star.a * (0.65 + Math.sin(now * 0.001 * star.twinkle) * 0.35);
-      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-      ctx.beginPath();
-      ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
-  private ensureStars(width: number, height: number) {
-    if (this.stars.length > 0 && Math.abs(width - this.starWidth) < 80 && Math.abs(height - this.starHeight) < 80) {
-      return;
-    }
-
-    this.starWidth = width;
-    this.starHeight = height;
-    const count = Math.min(2200, Math.floor((width * height) / 620));
-    this.stars = Array.from({ length: count }, (_, index) => {
-      const random = seeded(index * 13 + 7);
-      return {
-        x: random() * width,
-        y: random() * height,
-        r: random() > 0.93 ? 1.45 : 0.42 + random() * 0.9,
-        a: 0.18 + random() * 0.74,
-        twinkle: 0.5 + random() * 2.2
-      };
-    });
+  private drawSpace(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    ctx.clearRect(0, 0, width, height);
   }
 
   private drawDistortedGrid(ctx: CanvasRenderingContext2D, bodies: Body[], width: number, height: number) {
     ctx.save();
     ctx.strokeStyle = "rgba(148, 163, 184, 0.11)";
     ctx.lineWidth = 1;
+    const denseScene = bodies.length > 120;
+    if (denseScene) {
+      this.drawSimpleGrid(ctx, width, height, 76);
+      ctx.restore();
+      return;
+    }
 
-    for (let x = -40; x <= width + 40; x += 52) {
+    const lineStep = denseScene ? 76 : 52;
+    const segmentStep = denseScene ? 34 : 20;
+
+    for (let x = -40; x <= width + 40; x += lineStep) {
       ctx.beginPath();
-      for (let y = -40; y <= height + 40; y += 20) {
+      for (let y = -40; y <= height + 40; y += segmentStep) {
         const point = distortPoint({ x, y }, bodies);
         if (y === -40) {
           ctx.moveTo(point.x, point.y);
@@ -148,9 +112,9 @@ export class CanvasRenderer {
       ctx.stroke();
     }
 
-    for (let y = -40; y <= height + 40; y += 52) {
+    for (let y = -40; y <= height + 40; y += lineStep) {
       ctx.beginPath();
-      for (let x = -40; x <= width + 40; x += 20) {
+      for (let x = -40; x <= width + 40; x += segmentStep) {
         const point = distortPoint({ x, y }, bodies);
         if (x === -40) {
           ctx.moveTo(point.x, point.y);
@@ -162,6 +126,19 @@ export class CanvasRenderer {
     }
 
     ctx.restore();
+  }
+
+  private drawSimpleGrid(ctx: CanvasRenderingContext2D, width: number, height: number, step: number) {
+    ctx.beginPath();
+    for (let x = 0; x <= width; x += step) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+    }
+    for (let y = 0; y <= height; y += step) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+    }
+    ctx.stroke();
   }
 
   private drawHeatmap(ctx: CanvasRenderingContext2D, simulation: Simulation, width: number, height: number) {
@@ -212,7 +189,12 @@ export class CanvasRenderer {
     ctx.restore();
   }
 
-  private drawBody(ctx: CanvasRenderingContext2D, body: Body, now: number, darkMatterVisible: boolean) {
+  private drawBody(ctx: CanvasRenderingContext2D, body: Body, now: number, darkMatterVisible: boolean, bodyCount: number) {
+    if (body.type === "asteroid" || body.type === "debris" || (body.radius <= 4 && bodyCount > 160)) {
+      this.drawParticle(ctx, body);
+      return;
+    }
+
     if (body.type === "star") {
       drawStarGlow(ctx, body, now);
     }
@@ -242,6 +224,14 @@ export class CanvasRenderer {
     }
 
     this.drawPlanet(ctx, body);
+  }
+
+  private drawParticle(ctx: CanvasRenderingContext2D, body: Body) {
+    ctx.fillStyle = body.color;
+    ctx.globalAlpha = body.type === "debris" ? 0.72 : 0.86;
+    const size = Math.max(2, Math.min(4, body.radius * 1.45));
+    ctx.fillRect(body.position.x - size / 2, body.position.y - size / 2, size, size);
+    ctx.globalAlpha = 1;
   }
 
   private drawPlanet(ctx: CanvasRenderingContext2D, body: Body) {
@@ -414,12 +404,4 @@ export class CanvasRenderer {
     }
     ctx.restore();
   }
-}
-
-function seeded(seed: number) {
-  let value = seed;
-  return () => {
-    value = (value * 1103515245 + 12345) % 2147483648;
-    return value / 2147483648;
-  };
 }

@@ -44,9 +44,9 @@ export function createPreset(key: PresetKey, dimensions: Dimensions): Body[] {
     case "figureEight":
       return figureEight(center);
     case "galaxyCollision":
-      return galaxyCollision(center, dimensions, 128);
+      return galaxyCollision(center, dimensions, dimensions.width < 700 ? 60 : 68);
     case "galaxyMode":
-      return galaxyCollision(center, dimensions, 220);
+      return galaxyCollision(center, dimensions, dimensions.width < 700 ? 60 : 70);
     case "captureChallenge":
       return captureChallenge(center);
     case "empty":
@@ -183,7 +183,7 @@ function galaxyCluster(center: Vector, drift: Vector, spinSign: 1 | -1, count: n
     const direction = normalize(sub(position, center));
     const tangent = scale(perpendicular(direction), spinSign);
     const orbitSpeed = Math.sqrt((DEFAULT_GRAVITY * (halo.mass + core.mass)) / Math.max(20, radius)) * 0.64;
-    const type: BodyType = i % 19 === 0 ? "planet" : i % 5 === 0 ? "debris" : "asteroid";
+    const type: BodyType = i % 31 === 0 ? "planet" : i % 5 === 0 ? "debris" : "asteroid";
     const body = makeBody(type, position, add(drift, scale(tangent, orbitSpeed)), {
       mass: type === "planet" ? 0.35 : type === "debris" ? 0.03 : 0.08,
       radius: type === "planet" ? 4 : 2,

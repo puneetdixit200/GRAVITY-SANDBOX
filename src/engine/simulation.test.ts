@@ -7,6 +7,7 @@ import {
   makeBody,
   totalMomentum
 } from "./Simulation";
+import { createPreset } from "./Presets";
 
 describe("Simulation physics", () => {
   it("computes equal and opposite accelerations for matching bodies", () => {
@@ -70,6 +71,26 @@ describe("Simulation physics", () => {
     expect(sim.effects.some((effect) => effect.kind === "absorb")).toBe(true);
   });
 
+  it("lets dark matter attract bodies without colliding into them", () => {
+    const halo = makeBody("darkMatter", { x: 0, y: 0 }, { x: 0, y: 0 }, { mass: 200, radius: 80, hidden: true });
+    const planet = makeBody("planet", { x: 0, y: 0 }, { x: 0, y: 0 });
+    const sim = new Simulation({ bodies: [halo, planet], gravity: 20 });
+
+    sim.resolveCollisions();
+
+    expect(sim.bodies).toHaveLength(2);
+    expect(sim.computeAccelerations()[1].x).toBeCloseTo(0, 8);
+  });
+
+  it("can sample potential energy for dense scenes without exact pair scans", () => {
+    const bodies = createPreset("galaxyMode", { width: 1440, height: 900 });
+    const sim = new Simulation({ bodies, gravity: 20 });
+
+    const energy = sim.totalEnergy({ maxPairs: 8_000 });
+
+    expect(Number.isFinite(energy)).toBe(true);
+  });
+
   it("restores a previous snapshot for time rewind", () => {
     const sim = new Simulation({
       bodies: [makeBody("planet", { x: 0, y: 0 }, { x: 10, y: 0 })],
@@ -101,5 +122,46 @@ describe("Simulation physics", () => {
     expect(decoded.forceExponent).toBe(2);
     expect(decoded.bodies.map((body) => body.type)).toEqual(["star", "darkMatter"]);
     expect(decoded.bodies[1].hidden).toBe(true);
+  });
+
+  it("does not explode galaxy dust into thousands of Roche fragments", () => {
+    const bodies = createPreset("galaxyMode", { width: 1440, height: 900 });
+    const sim = new Simulation({ bodies, gravity: 20 });
+
+    sim.step(0.064, 1);
+    sim.step(0.064, 1);
+
+    expect(sim.bodies.length).toBeLessThanOrEqual(600);
+  });
+
+  it("does not burn CPU merging tiny galaxy dust particles into each other", () => {
+    const bodies = createPreset("galaxyMode", { width: 1440, height: 900 });
+    const sim = new Simulation({ bodies, gravity: 20 });
+    const initialCount = bodies.length;
+
+    for (let i = 0; i < 80; i += 1) {
+      sim.step(0.064, 1);
+    }
+
+    expect(sim.bodies.length).toBeGreaterThanOrEqual(initialCount);
+    expect(sim.bodies.length).toBeLessThanOrEqual(initialCount + 80);
+  });
+
+  it("switches dense particle scenes to the hybrid force solver", () => {
+    const bodies = [
+      makeBody("star", { x: 0, y: 0 }, { x: 0, y: 0 }, { mass: 60 }),
+      ...Array.from({ length: 280 }, (_, index) =>
+        makeBody(
+          "asteroid",
+          { x: Math.cos(index) * (80 + index * 0.5), y: Math.sin(index) * (80 + index * 0.5) },
+          { x: 0, y: 0 }
+        )
+      )
+    ];
+    const sim = new Simulation({ bodies, gravity: 20 });
+
+    sim.step(0.016, 1);
+
+    expect(sim.lastForceMode).toBe("hybrid");
   });
 });
