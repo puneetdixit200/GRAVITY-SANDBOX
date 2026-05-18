@@ -16,14 +16,7 @@ export function BodyInfoPopup({ body, anchor, onClose, onRemove }: BodyInfoPopup
   }
 
   return (
-    <aside
-      className="body-info"
-      style={{
-        left: `min(calc(100vw - 248px), ${Math.max(12, anchor.x + 16)}px)`,
-        top: `min(calc(100vh - 220px), ${Math.max(12, anchor.y + 16)}px)`
-      }}
-      aria-label="Selected body details"
-    >
+    <aside className="body-info" aria-label="Selected body details">
       <header>
         <div>
           <span className="eyebrow">{body.type}</span>

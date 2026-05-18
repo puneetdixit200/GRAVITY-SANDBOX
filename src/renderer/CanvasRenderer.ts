@@ -12,6 +12,7 @@ export type RenderOptions = {
   barycenter: boolean;
   lagrange: boolean;
   darkMatterVisible: boolean;
+  view3d: boolean;
   placement: PlacementPreview | null;
 };
 
@@ -24,6 +25,12 @@ export class CanvasRenderer {
 
     const bodyCount = simulation.bodies.length;
     const { width, height, ratio } = this.resize(canvas, bodyCount);
+    const bodies = options.view3d ? this.projectBodies(simulation.bodies, width, height) : simulation.bodies;
+    const effects = options.view3d ? simulation.effects.map((effect) => ({
+      ...effect,
+      position: this.projectPoint(effect.position, width, height),
+      radius: effect.radius * 0.78
+    })) : simulation.effects;
     context.save();
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
     this.drawSpace(context, width, height);
@@ -33,33 +40,40 @@ export class CanvasRenderer {
     }
 
     if (options.grid) {
-      this.drawDistortedGrid(context, simulation.bodies, width, height);
+      if (options.view3d) {
+        this.drawPerspectiveGrid(context, width, height);
+      } else {
+        this.drawDistortedGrid(context, simulation.bodies, width, height);
+      }
     }
 
     if (options.fieldLines) {
       this.drawFieldLines(context, simulation, width, height);
     }
 
-    drawTrails(context, simulation.bodies, options.trails);
-    drawLensingRings(context, simulation.bodies);
-    drawEffects(context, simulation.effects);
+    drawTrails(context, bodies, options.trails);
+    drawLensingRings(context, bodies);
+    drawEffects(context, effects);
 
     if (options.lagrange) {
-      this.drawLagrangePoints(context, simulation.lagrangePoints());
+      const points = options.view3d
+        ? simulation.lagrangePoints().map((point) => ({ ...point, position: this.projectPoint(point.position, width, height) }))
+        : simulation.lagrangePoints();
+      this.drawLagrangePoints(context, points);
     }
 
     if (options.barycenter) {
-      this.drawBarycenter(context, simulation.barycenter(), now);
+      this.drawBarycenter(context, options.view3d ? this.projectPoint(simulation.barycenter(), width, height) : simulation.barycenter(), now);
     }
 
-    for (const body of simulation.bodies) {
+    for (const body of bodies) {
       if (body.hidden && !options.darkMatterVisible) {
         continue;
       }
       this.drawBody(context, body, now, options.darkMatterVisible, bodyCount);
     }
 
-    this.drawPlacement(context, options.placement);
+    this.drawPlacement(context, options.view3d && options.placement ? this.projectPlacement(options.placement, width, height) : options.placement);
     context.restore();
   }
 
@@ -139,6 +153,34 @@ export class CanvasRenderer {
       ctx.lineTo(width, y);
     }
     ctx.stroke();
+  }
+
+  private drawPerspectiveGrid(ctx: CanvasRenderingContext2D, width: number, height: number) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(148, 163, 184, 0.14)";
+    ctx.lineWidth = 1;
+    const centerY = height * 0.52;
+    const rows = 11;
+    const columns = 15;
+
+    ctx.beginPath();
+    for (let row = -rows; row <= rows; row += 1) {
+      const y = centerY + row * 38;
+      const left = this.projectPoint({ x: -80, y }, width, height);
+      const right = this.projectPoint({ x: width + 80, y }, width, height);
+      ctx.moveTo(left.x, left.y);
+      ctx.lineTo(right.x, right.y);
+    }
+
+    for (let column = -columns; column <= columns; column += 1) {
+      const x = width / 2 + column * 70;
+      const top = this.projectPoint({ x, y: -120 }, width, height);
+      const bottom = this.projectPoint({ x, y: height + 160 }, width, height);
+      ctx.moveTo(top.x, top.y);
+      ctx.lineTo(bottom.x, bottom.y);
+    }
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawHeatmap(ctx: CanvasRenderingContext2D, simulation: Simulation, width: number, height: number) {
@@ -403,5 +445,36 @@ export class CanvasRenderer {
       ctx.fill();
     }
     ctx.restore();
+  }
+
+  private projectBodies(bodies: Body[], width: number, height: number): Body[] {
+    return bodies.map((body) => {
+      const position = this.projectPoint(body.position, width, height);
+      const depthScale = 0.74 + Math.max(0, Math.min(1, body.position.y / Math.max(1, height))) * 0.42;
+      return {
+        ...body,
+        position,
+        radius: body.radius * depthScale,
+        trail: body.trail.map((point) => ({ ...this.projectPoint(point, width, height), t: point.t }))
+      };
+    });
+  }
+
+  private projectPlacement(placement: PlacementPreview, width: number, height: number): PlacementPreview {
+    return {
+      ...placement,
+      start: this.projectPoint(placement.start, width, height),
+      current: this.projectPoint(placement.current, width, height)
+    };
+  }
+
+  private projectPoint(point: Vector, width: number, height: number): Vector {
+    const center = { x: width / 2, y: height / 2 };
+    const dx = point.x - center.x;
+    const dy = point.y - center.y;
+    return {
+      x: center.x + dx + dy * 0.18,
+      y: center.y + dy * 0.58 - dx * 0.055
+    };
   }
 }

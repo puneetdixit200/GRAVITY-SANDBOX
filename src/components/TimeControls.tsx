@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  Box,
   Brain,
   Gauge,
   Grid3X3,
@@ -117,6 +118,8 @@ export function TimeControls({
         <Toggle icon={<Radar size={16} />} label="Bary" active={settings.barycenter} onClick={() => onSettingsChange({ barycenter: !settings.barycenter })} />
         <Toggle icon={<Activity size={16} />} label="Lagrange" active={settings.lagrange} onClick={() => onSettingsChange({ lagrange: !settings.lagrange })} />
         <Toggle icon={<Brain size={16} />} label="Dark" active={settings.darkMatterVisible} onClick={() => onSettingsChange({ darkMatterVisible: !settings.darkMatterVisible })} />
+        <Toggle icon={<Brain size={16} />} label="Teach" active={settings.teachMode} onClick={() => onSettingsChange({ teachMode: !settings.teachMode })} />
+        <Toggle icon={<Box size={16} />} label="3D View" active={settings.view3d} onClick={() => onSettingsChange({ view3d: !settings.view3d })} />
         <Toggle
           icon={settings.sound ? <Volume2 size={16} /> : <VolumeX size={16} />}
           label="Sound"

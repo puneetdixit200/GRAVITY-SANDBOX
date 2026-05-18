@@ -4,7 +4,9 @@ import {
   Simulation,
   decodeShareState,
   encodeShareState,
+  headingDegrees,
   makeBody,
+  shortestAngleDeltaDegrees,
   totalMomentum
 } from "./Simulation";
 import { createPreset } from "./Presets";
@@ -42,6 +44,29 @@ describe("Simulation physics", () => {
     expect(radius).toBeGreaterThan(90);
     expect(radius).toBeLessThan(155);
     expect(Number.isFinite(sim.totalEnergy())).toBe(true);
+  });
+
+  it("changes a body's velocity heading when gravity pulls off-axis", () => {
+    const star = makeBody("star", { x: 0, y: 0 }, { x: 0, y: 0 }, { mass: 80, radius: 18 });
+    const probe = makeBody("planet", { x: 120, y: 0 }, { x: 0, y: 3.2 }, { mass: 1, radius: 4 });
+    const initialHeading = headingDegrees(probe.velocity);
+    const sim = new Simulation({
+      gravity: 20,
+      softening: 1,
+      collisionScale: 0.1,
+      bodies: [star, probe]
+    });
+
+    for (let i = 0; i < 180; i += 1) {
+      sim.step(0.016, 3);
+    }
+
+    const finalHeading = headingDegrees(sim.bodies[1].velocity);
+    const turn = Math.abs(shortestAngleDeltaDegrees(initialHeading, finalHeading));
+
+    expect(turn).toBeGreaterThan(3);
+    expect(turn).toBeLessThan(90);
+    expect(Number.isFinite(finalHeading)).toBe(true);
   });
 
   it("merges overlapping bodies while conserving total momentum", () => {

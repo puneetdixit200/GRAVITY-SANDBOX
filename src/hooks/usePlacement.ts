@@ -24,6 +24,7 @@ type UsePlacementOptions = {
   darkMatterVisible: boolean;
   onSelectBody: (body: Body | null, position?: Vector) => void;
   onBodiesChanged: () => void;
+  onBodyPlaced?: (body: Body) => void;
 };
 
 const PLANET_COLORS = ["#4a9eff", "#ff6b4a", "#50e890", "#ffb84a", "#c77dff", "#5eead4"];
@@ -34,7 +35,8 @@ export function usePlacement({
   selectedType,
   darkMatterVisible,
   onSelectBody,
-  onBodiesChanged
+  onBodiesChanged,
+  onBodyPlaced
 }: UsePlacementOptions) {
   const placementRef = useRef<PlacementPreview | null>(null);
   const colorIndexRef = useRef(0);
@@ -90,6 +92,7 @@ export function usePlacement({
     });
     simulation.addBody(body);
     onSelectBody(body, preview.start);
+    onBodyPlaced?.(body);
     onBodiesChanged();
   };
 

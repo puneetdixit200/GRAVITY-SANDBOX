@@ -5,7 +5,11 @@ import {
   Body,
   Simulation,
   SimulationEffect,
+  add,
+  headingDegrees,
   magnitude,
+  scale,
+  shortestAngleDeltaDegrees,
   totalMomentum
 } from "@/engine/Simulation";
 import { CanvasRenderer } from "@/renderer/CanvasRenderer";
@@ -21,6 +25,7 @@ type SimulationCanvasProps = {
   onStats: (stats: SimulationStats) => void;
   onAudioFrame: (bodies: Body[]) => void;
   onEffects: (effects: SimulationEffect[]) => void;
+  onBodyPlaced: (body: Body) => void;
 };
 
 export function SimulationCanvas({
@@ -30,7 +35,8 @@ export function SimulationCanvas({
   onBodiesChanged,
   onStats,
   onAudioFrame,
-  onEffects
+  onEffects,
+  onBodyPlaced
 }: SimulationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderer = useMemo(() => new CanvasRenderer(), []);
@@ -47,7 +53,8 @@ export function SimulationCanvas({
     selectedType: settings.selectedType,
     darkMatterVisible: settings.darkMatterVisible,
     onSelectBody,
-    onBodiesChanged
+    onBodiesChanged,
+    onBodyPlaced
   });
 
   useAnimationLoop((dt, now) => {
@@ -100,6 +107,7 @@ export function SimulationCanvas({
           barycenter: settings.barycenter,
           lagrange: settings.lagrange,
           darkMatterVisible: settings.darkMatterVisible,
+          view3d: settings.view3d,
           placement: preview
         },
         now
@@ -123,7 +131,9 @@ export function SimulationCanvas({
         angularMomentum: simulation.totalAngularMomentum(),
         elapsed: simulation.elapsed,
         fps: frameCounterRef.current.fps,
-        historyLength: simulation.historyLength()
+        historyLength: simulation.historyLength(),
+        averageTurnDegrees: averageTurnDegrees(simulation.bodies, frameDt * settings.timeScale),
+        forceMode: simulation.lastForceMode
       });
     }
   });
@@ -136,4 +146,20 @@ export function SimulationCanvas({
       {...placement.handlers}
     />
   );
+}
+
+function averageTurnDegrees(bodies: Body[], dt: number): number {
+  const turns = bodies
+    .filter((body) => magnitude(body.velocity) > 0.01 && magnitude(body.acceleration) > 0.0001)
+    .map((body) => {
+      const before = headingDegrees(body.velocity);
+      const after = headingDegrees(add(body.velocity, scale(body.acceleration, dt)));
+      return Math.abs(shortestAngleDeltaDegrees(before, after));
+    });
+
+  if (turns.length === 0 || dt <= 0) {
+    return 0;
+  }
+
+  return turns.reduce((total, value) => total + value, 0) / turns.length / dt;
 }

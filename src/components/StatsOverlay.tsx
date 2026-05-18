@@ -13,6 +13,7 @@ export function StatsOverlay({ stats }: StatsOverlayProps) {
       <Stat icon={<Activity size={14} />} label="Bodies" value={stats.bodyCount.toString()} />
       <Stat icon={<Gauge size={14} />} label="FPS" value={stats.fps.toFixed(0)} />
       <Stat icon={<Sigma size={14} />} label="Energy" value={formatNumber(stats.energy)} />
+      <Stat icon={<Activity size={14} />} label="Turn" value={`${stats.averageTurnDegrees.toFixed(1)} deg/s`} />
       <Stat icon={<History size={14} />} label="Time" value={`${stats.elapsed.toFixed(1)}s`} />
     </section>
   );

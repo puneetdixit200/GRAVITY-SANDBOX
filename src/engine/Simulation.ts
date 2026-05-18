@@ -27,12 +27,14 @@ export {
   cloneBody,
   distance,
   finiteVector,
+  headingDegrees,
   makeBody,
   magnitude,
   normalize,
   perpendicular,
   radiusForMass,
   scale,
+  shortestAngleDeltaDegrees,
   sub,
   upgradeTypeForMass
 } from "./Body";

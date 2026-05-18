@@ -15,6 +15,8 @@ export type SandboxSettings = {
   darkMatterVisible: boolean;
   sound: boolean;
   conservation: boolean;
+  teachMode: boolean;
+  view3d: boolean;
 };
 
 export type SimulationStats = {
@@ -25,4 +27,12 @@ export type SimulationStats = {
   elapsed: number;
   fps: number;
   historyLength: number;
+  averageTurnDegrees: number;
+  forceMode: string;
+};
+
+export type TeachEvent = {
+  id: string;
+  time: string;
+  message: string;
 };

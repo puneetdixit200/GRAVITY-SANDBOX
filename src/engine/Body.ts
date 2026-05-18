@@ -136,6 +136,18 @@ export function magnitude(v: Vector): number {
   return Math.hypot(v.x, v.y);
 }
 
+export function headingDegrees(v: Vector): number {
+  if (magnitude(v) < 1e-9) {
+    return 0;
+  }
+  const degrees = (Math.atan2(v.y, v.x) * 180) / Math.PI;
+  return degrees < 0 ? degrees + 360 : degrees;
+}
+
+export function shortestAngleDeltaDegrees(from: number, to: number): number {
+  return ((((to - from) % 360) + 540) % 360) - 180;
+}
+
 export function distance(a: Vector, b: Vector): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
 }
