@@ -1,0 +1,16 @@
+.next/
+node_modules/
+out/
+dist/
+coverage/
+test-results/
+playwright-report/
+.vercel/
+*.tsbuildinfo
+.env*
+!.env.example
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+devserver*.log
