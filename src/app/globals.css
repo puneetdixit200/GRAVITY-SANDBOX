@@ -658,25 +658,53 @@ button {
 
 .github-link {
   position: absolute;
-  right: 14px;
-  bottom: 12px;
-  z-index: 6;
+  right: 12px;
+  bottom: 10px;
+  z-index: 24;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 10px;
-  color: var(--text);
+  gap: 7px;
+  height: 32px;
+  padding: 0 11px;
+  color: rgba(211, 219, 235, 0.84);
   text-decoration: none;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(20, 184, 166, 0.78);
   border-radius: 8px;
-  background: rgba(8, 8, 18, 0.92);
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.3);
-  font-size: 12px;
+  background: rgba(6, 9, 18, 0.94);
+  box-shadow:
+    0 0 0 1px rgba(20, 184, 166, 0.1),
+    0 10px 30px rgba(0, 0, 0, 0.34),
+    0 0 22px rgba(20, 184, 166, 0.12);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  letter-spacing: 0;
 }
 
 .github-link:hover {
-  border-color: rgba(245, 158, 11, 0.46);
+  border-color: rgba(45, 212, 191, 0.95);
+  box-shadow:
+    0 0 0 1px rgba(45, 212, 191, 0.16),
+    0 12px 34px rgba(0, 0, 0, 0.38),
+    0 0 26px rgba(20, 184, 166, 0.22);
+}
+
+.github-link .made-text {
+  color: rgba(211, 219, 235, 0.72);
+  white-space: nowrap;
+}
+
+.github-link .made-heart {
+  color: #fb3f6c;
+  font-size: 12px;
+  line-height: 1;
+  text-shadow: 0 0 10px rgba(251, 63, 108, 0.42);
+}
+
+.github-link strong {
+  color: #22d3ee;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .cinematic-banner {

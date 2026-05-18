@@ -1,6 +1,5 @@
 "use client";
 
-import { GitFork } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Body, Simulation, decodeShareState, encodeShareState } from "@/engine/Simulation";
 import { PRESETS, PresetKey, createPreset } from "@/engine/Presets";
@@ -369,8 +368,12 @@ export function GravitySandboxApp() {
         </div>
       ) : null}
       <a className="github-link" href="https://github.com/puneetdixit200" target="_blank" rel="noreferrer" aria-label="GitHub profile">
-        <GitFork size={16} />
-        <span>GitHub</span>
+        <span className="made-text">Made with</span>
+        <span className="made-heart" aria-hidden="true">
+          ♥
+        </span>
+        <span className="made-text">by</span>
+        <strong>PUNEET DIXIT</strong>
       </a>
     </main>
   );

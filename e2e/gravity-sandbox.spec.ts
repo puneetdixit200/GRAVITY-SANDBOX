@@ -134,6 +134,8 @@ test("supports movable/resizable dashboards, teach mode, 3D view, and GitHub lin
 
   const github = page.getByLabel("GitHub profile");
   await expect(github).toBeVisible();
+  await expect(github).toContainText("Made with");
+  await expect(github).toContainText("PUNEET DIXIT");
   await expect(github).toHaveAttribute("href", "https://github.com/puneetdixit200");
 });
 
