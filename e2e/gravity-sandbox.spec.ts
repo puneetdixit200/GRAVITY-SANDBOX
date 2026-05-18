@@ -26,7 +26,13 @@ test("renders the simulator and responds to core controls", async ({ page }, tes
     await page.mouse.move(center.x + 90, center.y - 35);
     await page.mouse.up();
   }
-  await expect(page.getByLabel("Simulation stats")).toContainText("1");
+  await expect
+    .poll(async () => {
+      const text = await page.getByLabel("Simulation stats").innerText();
+      const match = text.match(/Bodies\s+(\d+)/);
+      return match ? Number(match[1]) : 0;
+    })
+    .toBe(1);
 
   await page.getByTitle("Galaxy Mode").click();
   await expect

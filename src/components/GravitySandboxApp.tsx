@@ -444,7 +444,7 @@ function teachLayout(): PanelLayout {
   if (width < 700) {
     return { x: 8, y: 204, width: width - 16, height: 342 };
   }
-  return { x: Math.max(160, width - 838), y: 96, width: 480, height: 430 };
+  return { x: 160, y: 286, width: 480, height: 430 };
 }
 
 function controlsLayout(): PanelLayout {
