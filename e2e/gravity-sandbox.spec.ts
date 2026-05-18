@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 test("renders the simulator and responds to core controls", async ({ page }, testInfo) => {
   await page.goto("/");
+  await expect(page).toHaveTitle("Gravity Play");
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", /icon\.svg/);
 
   const canvas = page.getByLabel("Gravity simulation canvas");
   await expect(canvas).toBeVisible();

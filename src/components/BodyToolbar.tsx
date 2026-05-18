@@ -25,7 +25,7 @@ export function BodyToolbar({ selectedType, onSelectType }: BodyToolbarProps) {
     <aside className="body-toolbar" aria-label="Body type selector">
       <div className="toolbar-brand">
         <span>Gravity</span>
-        <strong>Sandbox</strong>
+        <strong>Play</strong>
       </div>
       <div className="tool-stack">
         {TYPES.map((type) => {

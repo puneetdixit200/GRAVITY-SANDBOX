@@ -1,10 +1,10 @@
-# Gravity Sandbox
+# Gravity Play
 
 Browser-based N-body gravity sandbox built with Next.js, TypeScript, and Canvas 2D.
 
 Live app: https://gravity-sandbox-eight.vercel.app
 
-![Gravity Sandbox desktop screenshot](docs/screenshots/gravity-sandbox-desktop.png)
+![Gravity Play desktop screenshot](docs/screenshots/gravity-sandbox-desktop.png)
 
 ## What It Does
 

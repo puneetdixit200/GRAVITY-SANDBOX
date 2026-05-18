@@ -1,6 +1,6 @@
 # Feature Guide
 
-![Gravity Sandbox desktop chaos view](screenshots/gravity-sandbox-desktop.png)
+![Gravity Play desktop chaos view](screenshots/gravity-sandbox-desktop.png)
 
 ## Core Sandbox
 
@@ -47,7 +47,7 @@ Teach mode is on by default. It explains the active physics and logs simulation 
 
 ## Visual Modes
 
-![Gravity Sandbox mobile dashboard view](screenshots/gravity-sandbox-mobile.png)
+![Gravity Play mobile dashboard view](screenshots/gravity-sandbox-mobile.png)
 
 - 2D mode: direct top-down simulation view.
 - 3D mode: projected perspective grid and depth-scaled bodies.

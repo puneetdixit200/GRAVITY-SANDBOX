@@ -6,13 +6,13 @@ These screenshots were captured from the production deployment at https://gravit
 
 The desktop capture shows the default expanded dashboards, Chaos Lab, teach mode, wormholes, supernova effects, conservation graphs, and the GitHub link.
 
-![Gravity Sandbox desktop screenshot](screenshots/gravity-sandbox-desktop.png)
+![Gravity Play desktop screenshot](screenshots/gravity-sandbox-desktop.png)
 
 ## Mobile
 
 The mobile capture shows the responsive full-size movable dashboards. Panels can be dragged and resized to reveal the canvas underneath.
 
-![Gravity Sandbox mobile screenshot](screenshots/gravity-sandbox-mobile.png)
+![Gravity Play mobile screenshot](screenshots/gravity-sandbox-mobile.png)
 
 ## Recapturing
 

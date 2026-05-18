@@ -18,8 +18,11 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Gravity Sandbox",
-  description: "A real-time browser N-body gravity simulator with orbit presets, collisions, black holes, and field overlays."
+  title: "Gravity Play",
+  description: "A real-time browser N-body gravity simulator with orbit presets, collisions, black holes, and field overlays.",
+  icons: {
+    icon: "/icon.svg"
+  }
 };
 
 export default function RootLayout({

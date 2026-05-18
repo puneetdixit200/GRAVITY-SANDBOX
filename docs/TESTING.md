@@ -1,6 +1,6 @@
 # Testing And Deployment
 
-![Gravity Sandbox desktop screenshot](screenshots/gravity-sandbox-desktop.png)
+![Gravity Play desktop screenshot](screenshots/gravity-sandbox-desktop.png)
 
 ## Local Checks
 
