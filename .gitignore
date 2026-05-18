@@ -14,3 +14,5 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 devserver*.log
+
+.vercel
