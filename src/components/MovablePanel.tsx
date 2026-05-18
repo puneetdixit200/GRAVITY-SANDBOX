@@ -20,6 +20,7 @@ type MovablePanelProps = {
   minHeight?: number;
   persist?: boolean;
   resetKey?: string | number | null;
+  initialZIndex?: number;
 };
 
 type Interaction = {
@@ -44,11 +45,12 @@ export function MovablePanel({
   minWidth = 120,
   minHeight = 72,
   persist = true,
-  resetKey = null
+  resetKey = null,
+  initialZIndex = 3
 }: MovablePanelProps) {
   const [layout, setLayout] = useState<PanelLayout>(FALLBACK_LAYOUT);
   const [ready, setReady] = useState(false);
-  const [zIndex, setZIndex] = useState(3);
+  const [zIndex, setZIndex] = useState(initialZIndex);
   const layoutRef = useRef<PanelLayout>(FALLBACK_LAYOUT);
   const interactionRef = useRef<Interaction | null>(null);
   const defaultLayoutRef = useRef(defaultLayout);
@@ -200,7 +202,7 @@ export function MovablePanel({
 }
 
 function panelStorageKey(id: string) {
-  return `gravity-sandbox-panel-${id}`;
+  return `gravity-sandbox-panel-v2-${id}`;
 }
 
 function readLayout(key: string): PanelLayout | null {

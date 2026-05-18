@@ -16,7 +16,7 @@ test("renders the simulator and responds to core controls", async ({ page }, tes
   expect(box).not.toBeNull();
   const center =
     testInfo.project.name === "mobile"
-      ? { x: box!.x + 56, y: box!.y + 250 }
+      ? { x: box!.x + 56, y: box!.y + 580 }
       : { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 };
   if (testInfo.project.name === "mobile") {
     await page.touchscreen.tap(center.x, center.y);
@@ -70,8 +70,29 @@ test("renders the simulator and responds to core controls", async ({ page }, tes
   await page.screenshot({ path: testInfo.outputPath("gravity-sandbox.png"), fullPage: true });
 });
 
-test("supports movable/resizable dashboards, teach mode, 3D view, and GitHub link", async ({ page }) => {
+test("supports movable/resizable dashboards, teach mode, 3D view, and GitHub link", async ({ page }, testInfo) => {
   await page.goto("/");
+
+  await expect(page.getByLabel("Teach mode")).toContainText("What is happening");
+  await expect(page.getByLabel("Teach event log")).toContainText(/Loaded|Ready|Preset|Simulation/);
+
+  if (testInfo.project.name === "chromium") {
+    const defaultPanels = [
+      { label: "stats movable panel", minWidth: 260, minHeight: 210 },
+      { label: "conservation movable panel", minWidth: 310, minHeight: 250 },
+      { label: "teach movable panel", minWidth: 430, minHeight: 400 },
+      { label: "time-controls movable panel", minWidth: 1040, minHeight: 220 }
+    ];
+
+    for (const panel of defaultPanels) {
+      const locator = page.getByLabel(panel.label);
+      await expect(locator).toBeVisible();
+      const box = await locator.boundingBox();
+      expect(box, `${panel.label} should start expanded`).not.toBeNull();
+      expect(box!.width, `${panel.label} width`).toBeGreaterThanOrEqual(panel.minWidth);
+      expect(box!.height, `${panel.label} height`).toBeGreaterThanOrEqual(panel.minHeight);
+    }
+  }
 
   const stats = page.getByLabel("Simulation stats");
   await expect(stats).toBeVisible();
@@ -101,10 +122,6 @@ test("supports movable/resizable dashboards, teach mode, 3D view, and GitHub lin
   const afterResize = await stats.boundingBox();
   expect(afterResize).not.toBeNull();
   expect(afterResize!.width).toBeGreaterThan(beforeResize!.width + 30);
-
-  await page.getByTitle("Teach").click();
-  await expect(page.getByLabel("Teach mode")).toContainText("What is happening");
-  await expect(page.getByLabel("Teach event log")).toContainText(/Loaded|Ready|Preset|Simulation/);
 
   await page.getByTitle("3D View").click();
   await expect(page.locator(".sandbox-shell")).toHaveAttribute("data-view-mode", "3d");

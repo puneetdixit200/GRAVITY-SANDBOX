@@ -44,7 +44,7 @@ const INITIAL_SETTINGS: SandboxSettings = {
   darkMatterVisible: false,
   sound: false,
   conservation: true,
-  teachMode: false,
+  teachMode: true,
   view3d: false
 };
 
@@ -230,22 +230,22 @@ export function GravitySandboxApp() {
         onEffects={handleEffects}
         onBodyPlaced={(body) => logEvent(`${body.name} launched at velocity ${Math.hypot(body.velocity.x, body.velocity.y).toFixed(2)}.`)}
       />
-      <MovablePanel id="toolbar" title="Body tools" className="panel-toolbar" defaultLayout={toolbarLayout} minWidth={96} minHeight={70}>
+      <MovablePanel id="toolbar" title="Body tools" className="panel-toolbar" defaultLayout={toolbarLayout} minWidth={96} minHeight={70} initialZIndex={4}>
         <BodyToolbar selectedType={settings.selectedType} onSelectType={(selectedType) => updateSettings({ selectedType })} />
       </MovablePanel>
-      <MovablePanel id="presets" title="Presets" className="panel-presets" defaultLayout={presetLayout} minWidth={260} minHeight={72}>
+      <MovablePanel id="presets" title="Presets" className="panel-presets" defaultLayout={presetLayout} minWidth={260} minHeight={72} initialZIndex={4}>
         <PresetLoader activePreset={activePreset} onLoadPreset={loadPreset} />
       </MovablePanel>
-      <MovablePanel id="stats" title="Simulation stats" className="panel-stats" defaultLayout={statsLayout} minWidth={190} minHeight={150}>
+      <MovablePanel id="stats" title="Simulation stats" className="panel-stats" defaultLayout={statsLayout} minWidth={190} minHeight={150} initialZIndex={8}>
         <StatsOverlay stats={stats} />
       </MovablePanel>
       {settings.conservation ? (
-        <MovablePanel id="conservation" title="Conservation" className="panel-conservation" defaultLayout={conservationLayout} minWidth={230} minHeight={170}>
+        <MovablePanel id="conservation" title="Conservation" className="panel-conservation" defaultLayout={conservationLayout} minWidth={230} minHeight={170} initialZIndex={6}>
           <ConservationDashboard history={statsHistory} />
         </MovablePanel>
       ) : null}
       {settings.teachMode ? (
-        <MovablePanel id="teach" title="Teach mode" className="panel-teach" defaultLayout={teachLayout} minWidth={310} minHeight={260}>
+        <MovablePanel id="teach" title="Teach mode" className="panel-teach" defaultLayout={teachLayout} minWidth={310} minHeight={260} initialZIndex={5}>
           <TeachPanel stats={stats} events={teachEvents} />
         </MovablePanel>
       ) : null}
@@ -259,11 +259,12 @@ export function GravitySandboxApp() {
           minHeight={210}
           persist={false}
           resetKey={selectedBody.id}
+          initialZIndex={12}
         >
           <BodyInfoPopup body={selectedBody} anchor={selected.anchor} onClose={() => setSelected(null)} onRemove={removeBody} />
         </MovablePanel>
       ) : null}
-      <MovablePanel id="time-controls" title="Controls" className="panel-controls" defaultLayout={controlsLayout} minWidth={320} minHeight={170}>
+      <MovablePanel id="time-controls" title="Controls" className="panel-controls" defaultLayout={controlsLayout} minWidth={320} minHeight={170} initialZIndex={7}>
         <TimeControls
           settings={settings}
           historyLength={stats.historyLength}
@@ -302,50 +303,50 @@ function messageForEffect(kind: string): string {
 function toolbarLayout(): PanelLayout {
   const { width, height } = viewport();
   if (width < 700) {
-    return { x: 8, y: 8, width: width - 16, height: 76 };
+    return { x: 8, y: 8, width: width - 16, height: 104 };
   }
-  return { x: 16, y: 16, width: 108, height: Math.max(360, height - 188) };
+  return { x: 16, y: 16, width: 128, height: Math.max(520, height - 208) };
 }
 
 function presetLayout(): PanelLayout {
   const { width } = viewport();
   if (width < 700) {
-    return { x: 8, y: 92, width: width - 16, height: 58 };
+    return { x: 8, y: 120, width: width - 16, height: 76 };
   }
-  return { x: 140, y: 16, width: Math.min(720, Math.max(280, width - 560)), height: 58 };
+  return { x: 160, y: 16, width: Math.min(860, Math.max(360, width - 620)), height: 72 };
 }
 
 function statsLayout(): PanelLayout {
   const { width } = viewport();
   if (width < 700) {
-    return { x: Math.max(8, width - 166), y: 166, width: 158, height: 188 };
+    return { x: Math.max(8, width - 218), y: 204, width: 210, height: 220 };
   }
-  return { x: Math.max(8, width - 214), y: 16, width: 198, height: 176 };
+  return { x: Math.max(8, width - 294), y: 16, width: 278, height: 220 };
 }
 
 function conservationLayout(): PanelLayout {
   const { width } = viewport();
   if (width < 700) {
-    return { x: 8, y: 364, width: width - 16, height: 214 };
+    return { x: Math.max(8, width - 218), y: 438, width: 210, height: 260 };
   }
-  return { x: Math.max(8, width - 282), y: 214, width: 266, height: 222 };
+  return { x: Math.max(8, width - 338), y: 252, width: 322, height: 260 };
 }
 
 function teachLayout(): PanelLayout {
   const { width } = viewport();
   if (width < 700) {
-    return { x: 8, y: 220, width: width - 16, height: 330 };
+    return { x: 8, y: 204, width: width - 16, height: 342 };
   }
-  return { x: Math.max(140, width - 686), y: 84, width: 392, height: 360 };
+  return { x: Math.max(160, width - 838), y: 96, width: 480, height: 430 };
 }
 
 function controlsLayout(): PanelLayout {
   const { width, height } = viewport();
   if (width < 700) {
-    return { x: 8, y: Math.max(8, height - 270), width: width - 16, height: 254 };
+    return { x: 8, y: Math.max(8, height - 304), width: width - 16, height: 288 };
   }
-  const panelWidth = Math.min(1060, width - 32);
-  return { x: Math.max(8, (width - panelWidth) / 2), y: Math.max(8, height - 188), width: panelWidth, height: 172 };
+  const panelWidth = Math.min(1180, width - 32);
+  return { x: Math.max(8, (width - panelWidth) / 2), y: Math.max(8, height - 246), width: panelWidth, height: 230 };
 }
 
 function bodyInfoLayout(anchor: { x: number; y: number }): PanelLayout {
