@@ -65,6 +65,16 @@ export function drawEffects(ctx: CanvasRenderingContext2D, effects: SimulationEf
       continue;
     }
 
+    if (effect.kind === "supernova") {
+      ctx.strokeStyle = alphaColor("#f59e0b", alpha * 0.5);
+      ctx.lineWidth = 2 + effect.strength;
+      for (let ring = 0; ring < 4; ring += 1) {
+        ctx.beginPath();
+        ctx.arc(effect.position.x, effect.position.y, radius * (0.75 + ring * 0.34), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
     const gradient = ctx.createRadialGradient(effect.position.x, effect.position.y, 0, effect.position.x, effect.position.y, radius);
     gradient.addColorStop(0, alphaColor(effect.color, alpha * 0.85));
     gradient.addColorStop(0.4, alphaColor(effect.color, alpha * 0.24));

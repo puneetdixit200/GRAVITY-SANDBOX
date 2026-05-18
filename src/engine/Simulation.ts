@@ -41,7 +41,9 @@ export {
 export type { Body, BodyDefinition, BodyType, TrailPoint, Vector } from "./Body";
 export type { ForceMode } from "./GravitySolver";
 
-export type EffectKind = "collision" | "absorb" | "roche" | "wave";
+export type EffectKind = "collision" | "absorb" | "roche" | "wave" | "supernova" | "wormhole";
+
+export type GravityGunMode = "pull" | "repel";
 
 export type SimulationEffect = {
   id: string;
@@ -52,6 +54,21 @@ export type SimulationEffect = {
   ttl: number;
   color: string;
   strength: number;
+};
+
+export type Wormhole = {
+  id: string;
+  pairId: string;
+  position: Vector;
+  radius: number;
+  color: string;
+  phase: number;
+};
+
+export type PredictedPath = {
+  id: string;
+  color: string;
+  points: Vector[];
 };
 
 export type LagrangePoint = {
@@ -69,6 +86,7 @@ export type ShareState = {
 
 export type SimulationOptions = {
   bodies?: Body[];
+  wormholes?: Wormhole[];
   gravity?: number;
   softening?: number;
   forceExponent?: number;
@@ -81,6 +99,12 @@ export type EnergyOptions = {
   maxPairs?: number;
 };
 
+export type PredictionOptions = {
+  steps?: number;
+  dt?: number;
+  maxBodies?: number;
+};
+
 type BodySnapshot = Omit<Body, "trail"> & {
   trail: Body["trail"];
 };
@@ -89,10 +113,13 @@ const EFFECT_TTL: Record<EffectKind, number> = {
   collision: 0.8,
   absorb: 1.1,
   roche: 1.4,
-  wave: 2.6
+  wave: 2.6,
+  supernova: 1.9,
+  wormhole: 1.15
 };
 
 let effectId = 0;
+let wormholeId = 0;
 
 function canRocheFragment(body: Body): boolean {
   return body.type === "planet" || body.type === "giant";
@@ -120,6 +147,7 @@ function shouldCheckCollision(a: Body, b: Body, denseScene: boolean): boolean {
 
 export class Simulation {
   bodies: Body[];
+  wormholes: Wormhole[];
   effects: SimulationEffect[] = [];
   gravity: number;
   softening: number;
@@ -131,9 +159,11 @@ export class Simulation {
   lastForceMode: ForceMode = "direct";
   private history: BodySnapshot[][] = [];
   private waveClock = new Map<string, number>();
+  private wormholeCooldown = new Map<string, number>();
 
   constructor(options: SimulationOptions = {}) {
     this.bodies = (options.bodies ?? []).map((body) => sanitizeBody(cloneBody(body)));
+    this.wormholes = (options.wormholes ?? []).map((wormhole) => ({ ...wormhole, position: { ...wormhole.position } }));
     this.gravity = options.gravity ?? 20;
     this.softening = options.softening ?? 0.6;
     this.forceExponent = options.forceExponent ?? 2;
@@ -145,6 +175,8 @@ export class Simulation {
 
   setBodies(bodies: Body[]) {
     this.bodies = bodies.map((body) => sanitizeBody(cloneBody(body)));
+    this.wormholes = [];
+    this.wormholeCooldown.clear();
     this.effects = [];
     this.history = [];
     this.elapsed = 0;
@@ -163,10 +195,190 @@ export class Simulation {
 
   clear() {
     this.bodies = [];
+    this.wormholes = [];
+    this.wormholeCooldown.clear();
     this.effects = [];
     this.history = [];
     this.elapsed = 0;
     this.captureSnapshot();
+  }
+
+  applyGravityGun(position: Vector, dt: number, mode: GravityGunMode = "pull", strength = 120) {
+    const safeDt = Math.max(0, Math.min(0.25, dt));
+    if (safeDt <= 0 || strength <= 0) {
+      return;
+    }
+
+    for (const body of this.bodies) {
+      if (body.hidden || body.type === "darkMatter") {
+        continue;
+      }
+
+      const directionVector = mode === "pull" ? sub(position, body.position) : sub(body.position, position);
+      const gap = Math.max(16, magnitude(directionVector));
+      const direction = normalize(directionVector);
+      const acceleration = Math.min(38, strength / (gap + 72));
+      body.velocity = finiteVector(add(body.velocity, scale(direction, acceleration * safeDt * 8)));
+    }
+  }
+
+  spawnWormholePair(dimensions: { width: number; height: number }, endpoints?: [Vector, Vector]): Wormhole[] {
+    const pairId = `wormhole-pair-${wormholeId += 1}`;
+    const radius = Math.max(24, Math.min(42, Math.min(dimensions.width, dimensions.height) * 0.045));
+    const positions = endpoints ?? [
+      { x: dimensions.width * 0.3, y: dimensions.height * 0.36 },
+      { x: dimensions.width * 0.7, y: dimensions.height * 0.64 }
+    ];
+    const holes: Wormhole[] = positions.map((position, index) => ({
+      id: `${pairId}-${index}`,
+      pairId,
+      position: { ...position },
+      radius,
+      color: index === 0 ? "#5eead4" : "#c77dff",
+      phase: Math.random() * Math.PI * 2
+    }));
+
+    this.wormholes = this.wormholes.concat(holes).slice(-8);
+    this.spawnEffect("wormhole", holes[0].position, radius * 2.4, "#5eead4", 1.4);
+    this.spawnEffect("wormhole", holes[1].position, radius * 2.4, "#c77dff", 1.4);
+    return holes;
+  }
+
+  triggerSupernova(origin?: Vector): boolean {
+    const candidates = this.bodies
+      .filter((body) => body.type !== "darkMatter" && body.type !== "blackHole" && body.type !== "debris" && body.mass >= 1)
+      .sort((a, b) => {
+        if (origin) {
+          return distance(a.position, origin) - distance(b.position, origin);
+        }
+        const starBonusA = a.type === "star" ? 10_000 : 0;
+        const starBonusB = b.type === "star" ? 10_000 : 0;
+        return b.mass + starBonusB - (a.mass + starBonusA);
+      });
+    const source = candidates[0];
+    if (!source) {
+      return false;
+    }
+
+    const debrisCount = Math.max(18, Math.min(72, Math.round(source.mass * 0.72)));
+    const debrisMass = Math.max(0.025, (source.mass * 0.22) / debrisCount);
+    const fragments: Body[] = Array.from({ length: debrisCount }, (_, index) => {
+      const angle = (index / debrisCount) * Math.PI * 2 + Math.sin(index * 8.17) * 0.18;
+      const direction = { x: Math.cos(angle), y: Math.sin(angle) };
+      const offset = scale(direction, source.radius * (0.55 + (index % 5) * 0.18));
+      const burstSpeed = 4.5 + (index % 9) * 0.55 + Math.sqrt(source.mass) * 0.18;
+      return makeBody("debris", add(source.position, offset), add(source.velocity, scale(direction, burstSpeed)), {
+        mass: debrisMass,
+        radius: Math.max(1.8, source.radius * 0.11),
+        color: index % 3 === 0 ? "#fef3c7" : index % 3 === 1 ? "#fb7185" : "#f59e0b",
+        name: "Supernova ejecta"
+      });
+    });
+
+    for (const body of this.bodies) {
+      if (body.id === source.id || body.type === "darkMatter") {
+        continue;
+      }
+      const direction = normalize(sub(body.position, source.position));
+      const gap = Math.max(24, distance(body.position, source.position));
+      const impulse = Math.min(16, (source.mass * 18) / (gap + 80));
+      body.velocity = finiteVector(add(body.velocity, scale(direction, impulse)));
+    }
+
+    this.bodies = this.bodies.filter((body) => body.id !== source.id).concat(fragments);
+    this.spawnEffect("supernova", source.position, source.radius * 7.5, "#ffffff", Math.min(5, source.mass / 16));
+    this.captureSnapshot();
+    return true;
+  }
+
+  spawnBlackHole(position = this.barycenter()): Body {
+    const blackHole = makeBody("blackHole", position, { x: 0, y: 0 }, {
+      mass: BODY_DEFINITIONS.blackHole.mass,
+      name: "Emergency Singularity"
+    });
+    this.addBody(blackHole);
+    this.spawnEffect("absorb", position, blackHole.radius * 3.2, "#ff7a18", 2);
+    return blackHole;
+  }
+
+  spawnMeteorStorm(dimensions: { width: number; height: number }, count = 28): Body[] {
+    const center = { x: dimensions.width / 2, y: dimensions.height / 2 };
+    const meteors = Array.from({ length: count }, (_, index) => {
+      const side = index % 4;
+      const t = ((index * 37) % 100) / 100;
+      const position =
+        side === 0
+          ? { x: -28, y: dimensions.height * t }
+          : side === 1
+            ? { x: dimensions.width + 28, y: dimensions.height * t }
+            : side === 2
+              ? { x: dimensions.width * t, y: -28 }
+              : { x: dimensions.width * t, y: dimensions.height + 28 };
+      const aim = add(center, {
+        x: Math.sin(index * 1.91) * dimensions.width * 0.24,
+        y: Math.cos(index * 1.37) * dimensions.height * 0.24
+      });
+      const speed = 4.8 + (index % 7) * 0.55;
+      return makeBody("asteroid", position, scale(normalize(sub(aim, position)), speed), {
+        mass: 0.12,
+        radius: 3,
+        color: index % 3 === 0 ? "#fca5a5" : "#d1d5db",
+        name: "Meteor"
+      });
+    });
+
+    this.bodies = this.bodies.concat(meteors);
+    this.spawnEffect("wave", center, Math.min(dimensions.width, dimensions.height) * 0.18, "#f59e0b", 1.2);
+    this.captureSnapshot();
+    return meteors;
+  }
+
+  collapseAtBarycenter(): Body {
+    const center = this.barycenter();
+    for (const body of this.bodies) {
+      if (body.type === "darkMatter" || body.type === "blackHole") {
+        continue;
+      }
+      const direction = normalize(sub(center, body.position));
+      body.velocity = finiteVector(add(body.velocity, scale(direction, 2.8)));
+    }
+    return this.spawnBlackHole(center);
+  }
+
+  predictPaths(options: PredictionOptions = {}): PredictedPath[] {
+    const steps = Math.max(4, Math.min(90, Math.floor(options.steps ?? 48)));
+    const dt = Math.max(0.005, Math.min(0.08, options.dt ?? 0.035));
+    const maxBodies = Math.max(1, Math.min(24, Math.floor(options.maxBodies ?? 12)));
+    const predictedBodies = [...this.bodies]
+      .filter((body) => !body.hidden && body.type !== "debris" && body.type !== "asteroid")
+      .sort((a, b) => b.mass * b.radius - a.mass * a.radius)
+      .slice(0, maxBodies);
+    const ids = new Set(predictedBodies.map((body) => body.id));
+    const paths = new Map<string, PredictedPath>(
+      predictedBodies.map((body) => [body.id, { id: body.id, color: body.color, points: [{ ...body.position }] }])
+    );
+    const clone = new Simulation({
+      bodies: this.snapshot(),
+      wormholes: this.wormholes,
+      gravity: this.gravity,
+      softening: this.softening,
+      forceExponent: this.forceExponent,
+      collisionScale: 0,
+      historyLimit: 1,
+      trailLimit: 0
+    });
+
+    for (let step = 0; step < steps; step += 1) {
+      clone.integrate(dt);
+      clone.resolveWormholes();
+      for (const body of clone.bodies) {
+        if (ids.has(body.id)) {
+          paths.get(body.id)?.points.push({ ...body.position });
+        }
+      }
+    }
+
+    return [...paths.values()].filter((path) => path.points.length > 1);
   }
 
   computeAccelerations(bodies = this.bodies, mode?: ForceMode): Vector[] {
@@ -210,6 +422,7 @@ export class Simulation {
 
     for (let index = 0; index < steps; index += 1) {
       this.integrate(subDt);
+      this.resolveWormholes();
       this.resolveRocheLimits();
       this.resolveCollisions();
       this.detectGravitationalWaves();
@@ -430,6 +643,47 @@ export class Simulation {
       body.velocity = finiteVector(add(body.velocity, scale(add(firstAccelerations[i], secondAccelerations[i]), 0.5 * dt)));
       body.acceleration = secondAccelerations[i];
       body.spin += dt * Math.max(0.05, magnitude(body.velocity) * 0.002);
+    }
+  }
+
+  private resolveWormholes() {
+    if (this.wormholes.length < 2) {
+      return;
+    }
+
+    for (const body of this.bodies) {
+      if (body.type === "darkMatter" || body.type === "blackHole") {
+        continue;
+      }
+
+      const cooldownUntil = this.wormholeCooldown.get(body.id) ?? -Infinity;
+      if (cooldownUntil > this.elapsed) {
+        continue;
+      }
+
+      for (const entry of this.wormholes) {
+        if (distance(body.position, entry.position) > entry.radius + body.radius * 0.7) {
+          continue;
+        }
+
+        const exit = this.wormholes.find((wormhole) => wormhole.pairId === entry.pairId && wormhole.id !== entry.id);
+        if (!exit) {
+          continue;
+        }
+
+        const speed = magnitude(body.velocity);
+        const entryOffset = sub(body.position, entry.position);
+        const direction =
+          magnitude(entryOffset) > 0.001
+            ? normalize(entryOffset)
+            : { x: Math.cos(exit.phase + this.elapsed), y: Math.sin(exit.phase + this.elapsed) };
+        body.position = finiteVector(add(exit.position, scale(direction, exit.radius + body.radius + 10)));
+        body.velocity = finiteVector(speed > 0 ? scale(normalize(body.velocity), speed) : body.velocity);
+        this.wormholeCooldown.set(body.id, this.elapsed + 0.55);
+        this.spawnEffect("wormhole", entry.position, entry.radius * 1.5, entry.color, 1.1);
+        this.spawnEffect("wormhole", exit.position, exit.radius * 1.7, exit.color, 1.1);
+        break;
+      }
     }
   }
 

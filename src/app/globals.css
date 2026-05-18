@@ -158,7 +158,8 @@ button {
 .time-controls,
 .body-info,
 .conservation-panel,
-.teach-panel {
+.teach-panel,
+.chaos-controls {
   position: relative;
   border: 0;
   background: transparent;
@@ -560,6 +561,74 @@ button {
   line-height: 1.45;
 }
 
+.chaos-controls {
+  height: 100%;
+  padding: 12px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+}
+
+.chaos-controls header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chaos-controls h2 {
+  margin: 2px 0 0;
+  font-family: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1.1;
+}
+
+.chaos-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  overflow: auto;
+}
+
+.chaos-button {
+  min-width: 0;
+  min-height: 42px;
+  padding: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.chaos-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chaos-button:hover {
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.075);
+}
+
+.chaos-button.is-active {
+  color: white;
+  border-color: rgba(94, 234, 212, 0.55);
+  background: rgba(94, 234, 212, 0.13);
+}
+
+.chaos-button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .teach-log {
   min-height: 0;
   margin: 0;
@@ -608,6 +677,38 @@ button {
 
 .github-link:hover {
   border-color: rgba(245, 158, 11, 0.46);
+}
+
+.cinematic-banner {
+  position: absolute;
+  left: 50%;
+  top: 34px;
+  z-index: 14;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 240px;
+  padding: 10px 16px;
+  color: white;
+  border: 1px solid rgba(245, 158, 11, 0.36);
+  border-radius: 8px;
+  background: rgba(8, 8, 18, 0.86);
+  box-shadow: 0 18px 70px rgba(245, 158, 11, 0.16);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.cinematic-banner strong {
+  font-family: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  font-size: 18px;
+  line-height: 1.05;
+}
+
+.cinematic-banner span {
+  color: var(--accent);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
 }
 
 .conservation-panel strong {
@@ -787,7 +888,8 @@ button {
 .panel-frame .time-controls,
 .panel-frame .body-info,
 .panel-frame .conservation-panel,
-.panel-frame .teach-panel {
+.panel-frame .teach-panel,
+.panel-frame .chaos-controls {
   position: static;
   inset: auto;
   right: auto;
@@ -819,4 +921,24 @@ button {
 
 .panel-frame .conservation-panel {
   display: block;
+}
+
+@media (max-width: 700px) {
+  .chaos-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chaos-button {
+    min-height: 34px;
+    justify-content: flex-start;
+  }
+
+  .chaos-button span {
+    font-size: 10px;
+  }
+
+  .cinematic-banner {
+    top: 8px;
+    min-width: 210px;
+  }
 }

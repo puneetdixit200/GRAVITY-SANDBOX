@@ -189,4 +189,64 @@ describe("Simulation physics", () => {
 
     expect(sim.lastForceMode).toBe("hybrid");
   });
+
+  it("gravity gun can pull and repel bodies without producing invalid velocity", () => {
+    const probe = makeBody("planet", { x: 100, y: 0 }, { x: 0, y: 0 });
+    const sim = new Simulation({ bodies: [probe], gravity: 20 });
+
+    sim.applyGravityGun({ x: 0, y: 0 }, 0.5, "pull", 120);
+    expect(sim.bodies[0].velocity.x).toBeLessThan(0);
+    expect(Number.isFinite(sim.bodies[0].velocity.x)).toBe(true);
+
+    sim.bodies[0].velocity = { x: 0, y: 0 };
+    sim.applyGravityGun({ x: 0, y: 0 }, 0.5, "repel", 120);
+    expect(sim.bodies[0].velocity.x).toBeGreaterThan(0);
+    expect(Number.isFinite(sim.bodies[0].velocity.x)).toBe(true);
+  });
+
+  it("teleports bodies through wormholes while preserving speed", () => {
+    const probe = makeBody("planet", { x: 80, y: 80 }, { x: 2, y: 1 }, { radius: 4 });
+    const sim = new Simulation({ bodies: [probe], gravity: 0 });
+    const [, exit] = sim.spawnWormholePair(
+      { width: 500, height: 400 },
+      [
+        { x: 80, y: 80 },
+        { x: 360, y: 280 }
+      ]
+    );
+    const speedBefore = Math.hypot(probe.velocity.x, probe.velocity.y);
+
+    sim.step(0.016, 1);
+
+    const speedAfter = Math.hypot(sim.bodies[0].velocity.x, sim.bodies[0].velocity.y);
+    expect(Math.hypot(sim.bodies[0].position.x - exit.position.x, sim.bodies[0].position.y - exit.position.y)).toBeLessThan(40);
+    expect(speedAfter).toBeCloseTo(speedBefore, 5);
+  });
+
+  it("supernova converts a massive body into debris and a visible effect", () => {
+    const star = makeBody("star", { x: 0, y: 0 }, { x: 0, y: 0 }, { mass: 80, radius: 20 });
+    const planet = makeBody("planet", { x: 70, y: 0 }, { x: 0, y: 1 });
+    const sim = new Simulation({ bodies: [star, planet], gravity: 20 });
+
+    const result = sim.triggerSupernova();
+
+    expect(result).toBe(true);
+    expect(sim.bodies.some((body) => body.id === star.id)).toBe(false);
+    expect(sim.bodies.filter((body) => body.type === "debris").length).toBeGreaterThan(12);
+    expect(sim.effects.some((effect) => effect.kind === "supernova")).toBe(true);
+  });
+
+  it("predicts future paths without mutating live bodies", () => {
+    const star = makeBody("star", { x: 0, y: 0 }, { x: 0, y: 0 }, { mass: 80 });
+    const planet = makeBody("planet", { x: 120, y: 0 }, { x: 0, y: 3.5 });
+    const sim = new Simulation({ bodies: [star, planet], gravity: 20, collisionScale: 0.1 });
+    const before = sim.snapshot();
+
+    const paths = sim.predictPaths({ steps: 24, dt: 0.02, maxBodies: 3 });
+
+    expect(paths.length).toBeGreaterThanOrEqual(2);
+    expect(paths[0].points.length).toBeGreaterThan(6);
+    expect(sim.bodies[0].position).toEqual(before[0].position);
+    expect(sim.bodies[1].velocity).toEqual(before[1].velocity);
+  });
 });

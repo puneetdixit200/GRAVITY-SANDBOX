@@ -1,5 +1,6 @@
-import { Body, LagrangePoint, Simulation, Vector, magnitude, normalize } from "@/engine/Simulation";
-import type { PlacementPreview } from "@/hooks/usePlacement";
+import { Simulation, magnitude, normalize } from "@/engine/Simulation";
+import type { Body, LagrangePoint, PredictedPath, Vector, Wormhole } from "@/engine/Simulation";
+import type { GravityGunPreview, PlacementPreview } from "@/hooks/usePlacement";
 import { drawBlackHoleDisk, drawEffects, drawStarGlow } from "./GlowEffects";
 import { drawLensingRings, distortPoint } from "./LensingEffect";
 import { alphaColor, drawTrails } from "./TrailRenderer";
@@ -13,10 +14,14 @@ export type RenderOptions = {
   lagrange: boolean;
   darkMatterVisible: boolean;
   view3d: boolean;
+  prediction: boolean;
   placement: PlacementPreview | null;
+  gravityGun: GravityGunPreview | null;
 };
 
 export class CanvasRenderer {
+  private predictionCache: { time: number; count: number; paths: PredictedPath[] } = { time: 0, count: -1, paths: [] };
+
   render(canvas: HTMLCanvasElement, simulation: Simulation, options: RenderOptions, now: number) {
     const context = canvas.getContext("2d");
     if (!context) {
@@ -52,6 +57,14 @@ export class CanvasRenderer {
     }
 
     drawTrails(context, bodies, options.trails);
+    if (options.prediction) {
+      this.drawPredictions(context, simulation, width, height, options.view3d, now);
+    }
+    this.drawWormholes(context, options.view3d ? simulation.wormholes.map((wormhole) => ({
+      ...wormhole,
+      position: this.projectPoint(wormhole.position, width, height),
+      radius: wormhole.radius * 0.82
+    })) : simulation.wormholes, now);
     drawLensingRings(context, bodies);
     drawEffects(context, effects);
 
@@ -74,6 +87,10 @@ export class CanvasRenderer {
     }
 
     this.drawPlacement(context, options.view3d && options.placement ? this.projectPlacement(options.placement, width, height) : options.placement);
+    this.drawGravityGun(context, options.view3d && options.gravityGun ? {
+      ...options.gravityGun,
+      position: this.projectPoint(options.gravityGun.position, width, height)
+    } : options.gravityGun, now);
     context.restore();
   }
 
@@ -266,6 +283,107 @@ export class CanvasRenderer {
     }
 
     this.drawPlanet(ctx, body);
+  }
+
+  private drawPredictions(ctx: CanvasRenderingContext2D, simulation: Simulation, width: number, height: number, view3d: boolean, now: number) {
+    if (simulation.bodies.length > 80) {
+      return;
+    }
+
+    if (now - this.predictionCache.time > 260 || this.predictionCache.count !== simulation.bodies.length) {
+      this.predictionCache = {
+        time: now,
+        count: simulation.bodies.length,
+        paths: simulation.predictPaths({ steps: 54, dt: 0.035, maxBodies: 12 })
+      };
+    }
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.setLineDash([5, 9]);
+    ctx.lineWidth = 1.15;
+
+    for (const path of this.predictionCache.paths) {
+      if (path.points.length < 2) {
+        continue;
+      }
+      ctx.strokeStyle = alphaColor(path.color, 0.28);
+      ctx.beginPath();
+      path.points.forEach((point, index) => {
+        const projected = view3d ? this.projectPoint(point, width, height) : point;
+        if (index === 0) {
+          ctx.moveTo(projected.x, projected.y);
+        } else {
+          ctx.lineTo(projected.x, projected.y);
+        }
+      });
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  private drawWormholes(ctx: CanvasRenderingContext2D, wormholes: Wormhole[], now: number) {
+    if (wormholes.length === 0) {
+      return;
+    }
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+
+    for (const wormhole of wormholes) {
+      const pulse = 1 + Math.sin(now * 0.006 + wormhole.phase) * 0.08;
+      const gradient = ctx.createRadialGradient(
+        wormhole.position.x,
+        wormhole.position.y,
+        wormhole.radius * 0.2,
+        wormhole.position.x,
+        wormhole.position.y,
+        wormhole.radius * 1.45 * pulse
+      );
+      gradient.addColorStop(0, "rgba(0, 0, 0, 0.7)");
+      gradient.addColorStop(0.45, alphaColor(wormhole.color, 0.24));
+      gradient.addColorStop(1, alphaColor(wormhole.color, 0));
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(wormhole.position.x, wormhole.position.y, wormhole.radius * 1.45 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = alphaColor(wormhole.color, 0.78);
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 5]);
+      ctx.beginPath();
+      ctx.arc(wormhole.position.x, wormhole.position.y, wormhole.radius * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = "rgba(255,255,255,0.22)";
+      ctx.beginPath();
+      ctx.arc(wormhole.position.x, wormhole.position.y, wormhole.radius * 0.52, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  private drawGravityGun(ctx: CanvasRenderingContext2D, gun: GravityGunPreview | null, now: number) {
+    if (!gun?.active) {
+      return;
+    }
+
+    const radius = 34 + Math.sin(now * 0.016) * 4;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.strokeStyle = gun.mode === "pull" ? "rgba(94, 234, 212, 0.86)" : "rgba(251, 113, 133, 0.88)";
+    ctx.fillStyle = gun.mode === "pull" ? "rgba(94, 234, 212, 0.08)" : "rgba(251, 113, 133, 0.1)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(gun.position.x, gun.position.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.setLineDash([4, 7]);
+    ctx.beginPath();
+    ctx.arc(gun.position.x, gun.position.y, radius * 1.7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawParticle(ctx: CanvasRenderingContext2D, body: Body) {

@@ -8,7 +8,8 @@ import {
   Simulation,
   Vector,
   distance,
-  makeBody
+  makeBody,
+  type GravityGunMode
 } from "@/engine/Simulation";
 
 export type PlacementPreview = {
@@ -17,11 +18,19 @@ export type PlacementPreview = {
   active: boolean;
 };
 
+export type GravityGunPreview = {
+  position: Vector;
+  active: boolean;
+  mode: GravityGunMode;
+};
+
 type UsePlacementOptions = {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   simulation: Simulation;
   selectedType: BodyType;
   darkMatterVisible: boolean;
+  gravityGunEnabled: boolean;
+  gravityGunRepel: boolean;
   onSelectBody: (body: Body | null, position?: Vector) => void;
   onBodiesChanged: () => void;
   onBodyPlaced?: (body: Body) => void;
@@ -34,11 +43,14 @@ export function usePlacement({
   simulation,
   selectedType,
   darkMatterVisible,
+  gravityGunEnabled,
+  gravityGunRepel,
   onSelectBody,
   onBodiesChanged,
   onBodyPlaced
 }: UsePlacementOptions) {
   const placementRef = useRef<PlacementPreview | null>(null);
+  const gravityGunRef = useRef<GravityGunPreview | null>(null);
   const colorIndexRef = useRef(0);
   const touchPlacementRef = useRef<PlacementPreview | null>(null);
 
@@ -102,6 +114,15 @@ export function usePlacement({
     }
 
     const point = pointFromClient(event.clientX, event.clientY);
+    if (gravityGunEnabled) {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      gravityGunRef.current = { position: point, active: true, mode: gravityGunRepel ? "repel" : "pull" };
+      placementRef.current = null;
+      onSelectBody(null);
+      return;
+    }
+
     const body = findBody(point);
 
     if (body) {
@@ -116,6 +137,12 @@ export function usePlacement({
   };
 
   const onPointerMove = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (gravityGunRef.current && event.pointerType !== "touch") {
+      gravityGunRef.current.position = pointFromClient(event.clientX, event.clientY);
+      gravityGunRef.current.mode = gravityGunRepel ? "repel" : "pull";
+      return;
+    }
+
     if (!placementRef.current || event.pointerType === "touch") {
       return;
     }
@@ -126,12 +153,17 @@ export function usePlacement({
     if (event.pointerType === "touch") {
       return;
     }
+    if (gravityGunRef.current) {
+      gravityGunRef.current = null;
+      return;
+    }
     placeBody(placementRef.current);
     placementRef.current = null;
   };
 
   const onPointerCancel = () => {
     placementRef.current = null;
+    gravityGunRef.current = null;
   };
 
   const midpointFromTouches = (event: TouchEvent<HTMLCanvasElement>): Vector => {
@@ -143,6 +175,13 @@ export function usePlacement({
     if (event.touches.length === 1) {
       const touch = event.touches[0];
       const point = pointFromClient(touch.clientX, touch.clientY);
+      if (gravityGunEnabled) {
+        event.preventDefault();
+        gravityGunRef.current = { position: point, active: true, mode: gravityGunRepel ? "repel" : "pull" };
+        touchPlacementRef.current = null;
+        onSelectBody(null);
+        return;
+      }
       const body = findBody(point);
       if (body) {
         onSelectBody(body, point);
@@ -162,6 +201,12 @@ export function usePlacement({
 
   const onTouchMove = (event: TouchEvent<HTMLCanvasElement>) => {
     if (!touchPlacementRef.current) {
+      if (gravityGunRef.current && event.touches.length > 0) {
+        event.preventDefault();
+        const touch = event.touches[0];
+        gravityGunRef.current.position = pointFromClient(touch.clientX, touch.clientY);
+        gravityGunRef.current.mode = gravityGunRepel ? "repel" : "pull";
+      }
       return;
     }
     event.preventDefault();
@@ -174,12 +219,17 @@ export function usePlacement({
   };
 
   const onTouchEnd = () => {
+    if (gravityGunRef.current) {
+      gravityGunRef.current = null;
+      return;
+    }
     placeBody(touchPlacementRef.current);
     touchPlacementRef.current = null;
   };
 
   return {
     placementRef,
+    gravityGunRef,
     touchPlacementRef,
     handlers: {
       onPointerDown,

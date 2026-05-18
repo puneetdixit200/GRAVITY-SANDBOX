@@ -95,7 +95,7 @@ export function useSoundscape(enabled: boolean): Soundscape {
     }
 
     for (const effect of effects) {
-      if (effect.kind !== "collision" && effect.kind !== "absorb" && effect.kind !== "roche") {
+      if (effect.kind !== "collision" && effect.kind !== "absorb" && effect.kind !== "roche" && effect.kind !== "supernova") {
         continue;
       }
 
@@ -103,10 +103,10 @@ export function useSoundscape(enabled: boolean): Soundscape {
       const boom = audio.context.createOscillator();
       const boomGain = audio.context.createGain();
       const filter = audio.context.createBiquadFilter();
-      boom.type = effect.kind === "roche" ? "sawtooth" : "sine";
-      boom.frequency.value = effect.kind === "absorb" ? 38 : 64;
+      boom.type = effect.kind === "roche" || effect.kind === "supernova" ? "sawtooth" : "sine";
+      boom.frequency.value = effect.kind === "supernova" ? 28 : effect.kind === "absorb" ? 38 : 64;
       filter.type = "lowpass";
-      filter.frequency.value = effect.kind === "roche" ? 420 : 260;
+      filter.frequency.value = effect.kind === "supernova" ? 180 : effect.kind === "roche" ? 420 : 260;
       boomGain.gain.setValueAtTime(0.0001, now);
       boomGain.gain.exponentialRampToValueAtTime(Math.min(0.18, 0.04 + effect.strength * 0.025), now + 0.02);
       boomGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.75);

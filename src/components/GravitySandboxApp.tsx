@@ -8,6 +8,7 @@ import { useSoundscape } from "@/hooks/useSoundscape";
 import { BackgroundStars } from "./BackgroundStars";
 import { BodyInfoPopup } from "./BodyInfoPopup";
 import { BodyToolbar } from "./BodyToolbar";
+import { ChaosControls } from "./ChaosControls";
 import { ConservationDashboard } from "./ConservationDashboard";
 import { MovablePanel, PanelLayout } from "./MovablePanel";
 import { PresetLoader } from "./PresetLoader";
@@ -45,7 +46,10 @@ const INITIAL_SETTINGS: SandboxSettings = {
   sound: false,
   conservation: true,
   teachMode: true,
-  view3d: false
+  view3d: false,
+  prediction: true,
+  gravityGun: false,
+  gravityGunRepel: false
 };
 
 const INITIAL_EVENTS: TeachEvent[] = [
@@ -65,8 +69,12 @@ export function GravitySandboxApp() {
   const [teachEvents, setTeachEvents] = useState<TeachEvent[]>(INITIAL_EVENTS);
   const [selected, setSelected] = useState<{ id: string; anchor: { x: number; y: number } } | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordRequest, setRecordRequest] = useState(0);
+  const [cinematicLabel, setCinematicLabel] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
   const eventIdRef = useRef(0);
+  const cinematicTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const soundscape = useSoundscape(settings.sound);
 
   if (!simulationRef.current) {
@@ -105,6 +113,12 @@ export function GravitySandboxApp() {
     setVersion((current) => current + 1);
   }, [simulation]);
 
+  useEffect(() => () => {
+    if (cinematicTimeoutRef.current) {
+      clearTimeout(cinematicTimeoutRef.current);
+    }
+  }, []);
+
   const selectedBody = selected ? simulation.bodies.find((body) => body.id === selected.id) ?? null : null;
 
   const logEvent = useCallback(
@@ -125,6 +139,14 @@ export function GravitySandboxApp() {
     },
     [simulation]
   );
+
+  const triggerCinematic = useCallback((label: string) => {
+    setCinematicLabel(label);
+    if (cinematicTimeoutRef.current) {
+      clearTimeout(cinematicTimeoutRef.current);
+    }
+    cinematicTimeoutRef.current = setTimeout(() => setCinematicLabel(null), 1900);
+  }, []);
 
   const updateSettings = useCallback((patch: Partial<SandboxSettings>) => {
     setSettings((current) => ({ ...current, ...patch }));
@@ -201,6 +223,46 @@ export function GravitySandboxApp() {
     [logEvent, simulation]
   );
 
+  const spawnWormholes = useCallback(() => {
+    simulation.spawnWormholePair({ width: window.innerWidth, height: window.innerHeight });
+    logEvent("Wormhole pair opened: bodies entering one mouth exit the other with velocity preserved.");
+    triggerCinematic("Wormhole bridge opened");
+    setVersion((current) => current + 1);
+  }, [logEvent, simulation, triggerCinematic]);
+
+  const triggerSupernova = useCallback(() => {
+    if (!simulation.triggerSupernova()) {
+      logEvent("Supernova failed: no massive visible body is available to detonate.");
+      return;
+    }
+    setActivePreset(null);
+    setStatsHistory([]);
+    logEvent("Supernova detonation: a massive body exploded into fast debris and pushed nearby bodies outward.");
+    triggerCinematic("Supernova detonation");
+    setVersion((current) => current + 1);
+  }, [logEvent, simulation, triggerCinematic]);
+
+  const spawnMeteorStorm = useCallback(() => {
+    simulation.spawnMeteorStorm({ width: window.innerWidth, height: window.innerHeight });
+    setActivePreset(null);
+    logEvent("Meteor storm launched: fast asteroids are crossing the system from the edges.");
+    triggerCinematic("Meteor storm incoming");
+    setVersion((current) => current + 1);
+  }, [logEvent, simulation, triggerCinematic]);
+
+  const collapseSystem = useCallback(() => {
+    simulation.collapseAtBarycenter();
+    setActivePreset(null);
+    logEvent("Collapse system: a singularity formed at the barycenter and bodies were nudged inward.");
+    triggerCinematic("System collapse");
+    setVersion((current) => current + 1);
+  }, [logEvent, simulation, triggerCinematic]);
+
+  const requestRecording = useCallback(() => {
+    setRecordRequest((current) => current + 1);
+    logEvent("Started a 6 second WebM recording export.");
+  }, [logEvent]);
+
   const handleEffects = useCallback(
     (effects: Parameters<typeof soundscape.trigger>[0]) => {
       soundscape.trigger(effects);
@@ -208,8 +270,17 @@ export function GravitySandboxApp() {
       for (const kind of kinds) {
         logEvent(messageForEffect(kind));
       }
+      if (kinds.has("supernova")) {
+        triggerCinematic("Supernova detonation");
+      } else if (kinds.has("collision")) {
+        triggerCinematic("Collision in slow motion");
+      } else if (kinds.has("absorb")) {
+        triggerCinematic("Absorption event");
+      } else if (kinds.has("roche")) {
+        triggerCinematic("Roche breakup");
+      }
     },
-    [logEvent, soundscape]
+    [logEvent, soundscape, triggerCinematic]
   );
 
   return (
@@ -219,6 +290,8 @@ export function GravitySandboxApp() {
         key={version}
         simulation={simulation}
         settings={settings}
+        cinematicActive={Boolean(cinematicLabel)}
+        recordRequest={recordRequest}
         onSelectBody={handleSelectBody}
         onBodiesChanged={() => {
           setActivePreset(null);
@@ -229,12 +302,26 @@ export function GravitySandboxApp() {
         onAudioFrame={soundscape.update}
         onEffects={handleEffects}
         onBodyPlaced={(body) => logEvent(`${body.name} launched at velocity ${Math.hypot(body.velocity.x, body.velocity.y).toFixed(2)}.`)}
+        onRecordingState={setRecording}
+        onRecordingComplete={logEvent}
       />
       <MovablePanel id="toolbar" title="Body tools" className="panel-toolbar" defaultLayout={toolbarLayout} minWidth={96} minHeight={70} initialZIndex={4}>
         <BodyToolbar selectedType={settings.selectedType} onSelectType={(selectedType) => updateSettings({ selectedType })} />
       </MovablePanel>
       <MovablePanel id="presets" title="Presets" className="panel-presets" defaultLayout={presetLayout} minWidth={260} minHeight={72} initialZIndex={4}>
         <PresetLoader activePreset={activePreset} onLoadPreset={loadPreset} />
+      </MovablePanel>
+      <MovablePanel id="chaos" title="Chaos lab" className="panel-chaos" defaultLayout={chaosLayout} minWidth={210} minHeight={150} initialZIndex={9}>
+        <ChaosControls
+          settings={settings}
+          recording={recording}
+          onSettingsChange={updateSettings}
+          onSpawnWormholes={spawnWormholes}
+          onSupernova={triggerSupernova}
+          onMeteorStorm={spawnMeteorStorm}
+          onCollapse={collapseSystem}
+          onRecord={requestRecording}
+        />
       </MovablePanel>
       <MovablePanel id="stats" title="Simulation stats" className="panel-stats" defaultLayout={statsLayout} minWidth={190} minHeight={150} initialZIndex={8}>
         <StatsOverlay stats={stats} />
@@ -275,6 +362,12 @@ export function GravitySandboxApp() {
           onRewind={rewind}
         />
       </MovablePanel>
+      {cinematicLabel ? (
+        <div className="cinematic-banner" aria-label="Cinematic event">
+          <strong>{cinematicLabel}</strong>
+          <span>slow motion</span>
+        </div>
+      ) : null}
       <a className="github-link" href="https://github.com/puneetdixit200" target="_blank" rel="noreferrer" aria-label="GitHub profile">
         <GitFork size={16} />
         <span>GitHub</span>
@@ -297,6 +390,12 @@ function messageForEffect(kind: string): string {
   if (kind === "roche") {
     return "Roche limit event: tidal gravity tore a body into debris.";
   }
+  if (kind === "supernova") {
+    return "Supernova: a massive body exploded into fast debris and a shock flash.";
+  }
+  if (kind === "wormhole") {
+    return "Wormhole transit: a body crossed a portal mouth and exited its pair.";
+  }
   return "Gravitational wave ripple emitted by nearby massive bodies.";
 }
 
@@ -314,6 +413,14 @@ function presetLayout(): PanelLayout {
     return { x: 8, y: 120, width: width - 16, height: 76 };
   }
   return { x: 160, y: 16, width: Math.min(860, Math.max(360, width - 620)), height: 72 };
+}
+
+function chaosLayout(): PanelLayout {
+  const { width } = viewport();
+  if (width < 700) {
+    return { x: Math.max(8, width - 218), y: 552, width: 210, height: 190 };
+  }
+  return { x: 160, y: 104, width: 500, height: 166 };
 }
 
 function statsLayout(): PanelLayout {

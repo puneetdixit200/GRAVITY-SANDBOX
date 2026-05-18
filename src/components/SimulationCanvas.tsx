@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   Body,
   Simulation,
@@ -20,23 +20,31 @@ import type { SandboxSettings, SimulationStats } from "./sandboxTypes";
 type SimulationCanvasProps = {
   simulation: Simulation;
   settings: SandboxSettings;
+  cinematicActive: boolean;
+  recordRequest: number;
   onSelectBody: (body: Body | null, position?: { x: number; y: number }) => void;
   onBodiesChanged: () => void;
   onStats: (stats: SimulationStats) => void;
   onAudioFrame: (bodies: Body[]) => void;
   onEffects: (effects: SimulationEffect[]) => void;
   onBodyPlaced: (body: Body) => void;
+  onRecordingState: (recording: boolean) => void;
+  onRecordingComplete: (message: string) => void;
 };
 
 export function SimulationCanvas({
   simulation,
   settings,
+  cinematicActive,
+  recordRequest,
   onSelectBody,
   onBodiesChanged,
   onStats,
   onAudioFrame,
   onEffects,
-  onBodyPlaced
+  onBodyPlaced,
+  onRecordingState,
+  onRecordingComplete
 }: SimulationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const renderer = useMemo(() => new CanvasRenderer(), []);
@@ -46,16 +54,27 @@ export function SimulationCanvas({
   const lastProcessedFrameRef = useRef(0);
   const frameCounterRef = useRef({ frames: 0, fps: 60, time: 0 });
   const effectIdsRef = useRef(new Set<string>());
+  const lastRecordRequestRef = useRef(0);
 
   const placement = usePlacement({
     canvasRef,
     simulation,
     selectedType: settings.selectedType,
     darkMatterVisible: settings.darkMatterVisible,
+    gravityGunEnabled: settings.gravityGun,
+    gravityGunRepel: settings.gravityGunRepel,
     onSelectBody,
     onBodiesChanged,
     onBodyPlaced
   });
+
+  useEffect(() => {
+    if (recordRequest <= 0 || recordRequest === lastRecordRequestRef.current) {
+      return;
+    }
+    lastRecordRequestRef.current = recordRequest;
+    startCanvasRecording(canvasRef.current, onRecordingState, onRecordingComplete);
+  }, [onRecordingComplete, onRecordingState, recordRequest]);
 
   useAnimationLoop((dt, now) => {
     accumulatedDtRef.current += dt;
@@ -80,9 +99,15 @@ export function SimulationCanvas({
       frameCounterRef.current.time = now;
     }
 
+    const activeTimeScale = cinematicActive ? Math.min(settings.timeScale, 0.55) : settings.timeScale;
+    const gravityGun = placement.gravityGunRef.current;
+    if (!settings.paused && gravityGun?.active) {
+      simulation.applyGravityGun(gravityGun.position, frameDt * activeTimeScale, gravityGun.mode);
+    }
+
     if (!settings.paused) {
-      const substeps = crowdedScene || simulation.bodies.length > 220 ? 1 : settings.timeScale > 6 ? 4 : 3;
-      simulation.step(frameDt * settings.timeScale, substeps);
+      const substeps = crowdedScene || simulation.bodies.length > 220 ? 1 : activeTimeScale > 6 ? 4 : 3;
+      simulation.step(frameDt * activeTimeScale, substeps);
     }
 
     const currentEffectIds = new Set(simulation.effects.map((effect) => effect.id));
@@ -108,7 +133,9 @@ export function SimulationCanvas({
           lagrange: settings.lagrange,
           darkMatterVisible: settings.darkMatterVisible,
           view3d: settings.view3d,
-          placement: preview
+          prediction: settings.prediction,
+          placement: preview,
+          gravityGun
         },
         now
       );
@@ -132,7 +159,7 @@ export function SimulationCanvas({
         elapsed: simulation.elapsed,
         fps: frameCounterRef.current.fps,
         historyLength: simulation.historyLength(),
-        averageTurnDegrees: averageTurnDegrees(simulation.bodies, frameDt * settings.timeScale),
+        averageTurnDegrees: averageTurnDegrees(simulation.bodies, frameDt * activeTimeScale),
         forceMode: simulation.lastForceMode
       });
     }
@@ -146,6 +173,49 @@ export function SimulationCanvas({
       {...placement.handlers}
     />
   );
+}
+
+function startCanvasRecording(
+  canvas: HTMLCanvasElement | null,
+  onRecordingState: (recording: boolean) => void,
+  onRecordingComplete: (message: string) => void
+) {
+  if (!canvas || typeof MediaRecorder === "undefined" || typeof canvas.captureStream !== "function") {
+    onRecordingComplete("Recording is not available in this browser.");
+    return;
+  }
+
+  const stream = canvas.captureStream(30);
+  const chunks: BlobPart[] = [];
+  const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("video/webm;codecs=vp9") ? "video/webm;codecs=vp9" : "video/webm" });
+  recorder.ondataavailable = (event) => {
+    if (event.data.size > 0) {
+      chunks.push(event.data);
+    }
+  };
+  recorder.onstop = () => {
+    stream.getTracks().forEach((track) => track.stop());
+    onRecordingState(false);
+    if (chunks.length === 0) {
+      onRecordingComplete("Recording did not capture any frames.");
+      return;
+    }
+    const blob = new Blob(chunks, { type: "video/webm" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `gravity-sandbox-${Date.now()}.webm`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 2000);
+    onRecordingComplete("Exported a WebM replay.");
+  };
+  onRecordingState(true);
+  recorder.start();
+  window.setTimeout(() => {
+    if (recorder.state !== "inactive") {
+      recorder.stop();
+    }
+  }, 6000);
 }
 
 function averageTurnDegrees(bodies: Body[], dt: number): number {

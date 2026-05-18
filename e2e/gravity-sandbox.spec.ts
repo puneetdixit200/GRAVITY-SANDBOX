@@ -130,3 +130,24 @@ test("supports movable/resizable dashboards, teach mode, 3D view, and GitHub lin
   await expect(github).toBeVisible();
   await expect(github).toHaveAttribute("href", "https://github.com/puneetdixit200");
 });
+
+test("exposes chaos toys for gravity gun, wormholes, disasters, prediction, and recording", async ({ page }) => {
+  await page.goto("/");
+
+  const chaos = page.getByLabel("Chaos controls");
+  await expect(chaos).toBeVisible();
+
+  await page.getByRole("button", { name: "Gravity gun" }).click();
+  await expect(page.getByRole("button", { name: "Gravity gun" })).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Orbit prediction" }).click();
+  await expect(page.getByRole("button", { name: "Orbit prediction" })).toHaveAttribute("aria-pressed", "false");
+
+  await page.getByRole("button", { name: "Spawn wormholes" }).click();
+  await expect(page.getByLabel("Teach event log")).toContainText(/Wormhole/);
+
+  await page.getByRole("button", { name: "Trigger supernova" }).click();
+  await expect(page.getByLabel("Cinematic event")).toContainText(/Supernova|Collision|Absorption/);
+
+  await expect(page.getByRole("button", { name: "Record WebM" })).toBeVisible();
+});

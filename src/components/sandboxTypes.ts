@@ -17,6 +17,9 @@ export type SandboxSettings = {
   conservation: boolean;
   teachMode: boolean;
   view3d: boolean;
+  prediction: boolean;
+  gravityGun: boolean;
+  gravityGunRepel: boolean;
 };
 
 export type SimulationStats = {
